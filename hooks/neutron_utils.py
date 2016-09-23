@@ -75,7 +75,7 @@ from charmhelpers.contrib.openstack.context import (
 import charmhelpers.contrib.openstack.templating as templating
 from charmhelpers.contrib.openstack.neutron import headers_package
 from neutron_contexts import (
-    CORE_PLUGIN, OVS, NSX, N1KV, OVS_ODL,
+    CORE_PLUGIN, OVS, NSX, N1KV, OVS_ODL, ACI,
     NeutronGatewayContext,
     L3AgentContext,
 )
@@ -181,6 +181,17 @@ GATEWAY_PKGS = {
         "neutron-metering-agent",
         "neutron-lbaas-agent",
     ],
+    ACI: [
+        "neutron-plugin-openvswitch-agent",
+        "openvswitch-switch",
+        "neutron-dhcp-agent",
+        'python-mysqldb',
+        'python-psycopg2',
+        'python-oslo.config',  # Force upgrade
+        "nova-api-metadata",
+        "neutron-metering-agent",
+        "neutron-lbaas-agent",
+    ],
 }
 
 EARLY_PACKAGES = {
@@ -188,6 +199,7 @@ EARLY_PACKAGES = {
     NSX: [],
     N1KV: [],
     OVS_ODL: [],
+    ACI: ['openvswitch-datapath-dkms'],
 }
 
 LEGACY_HA_TEMPLATE_FILES = 'files'
@@ -257,7 +269,7 @@ REQUIRED_INTERFACES = {
 
 def get_early_packages():
     '''Return a list of package for pre-install based on configured plugin'''
-    if config('plugin') in [OVS]:
+    if config('plugin') in [OVS, ACI]:
         pkgs = determine_dkms_package()
     else:
         return []
@@ -559,11 +571,31 @@ NEUTRON_N1KV_CONFIG_FILES = {
 }
 NEUTRON_N1KV_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
 
+NEUTRON_ACI_CONFIG_FILES = {
+    NEUTRON_CONF: {
+        'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
+                          NeutronGatewayContext(),
+                          SyslogContext()],
+        'services': [ 'neutron-dhcp-agent',
+                     'neutron-metadata-agent']
+    },
+    NEUTRON_ML2_PLUGIN_CONF: {
+        'hook_contexts': [NeutronGatewayContext()],
+        'services': ['neutron-plugin-openvswitch-agent']
+    },
+    NEUTRON_OVS_AGENT_CONF: {
+        'hook_contexts': [NeutronGatewayContext()],
+        'services': ['neutron-openvswitch-agent']
+    },
+}
+NEUTRON_ACI_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
+
 CONFIG_FILES = {
     NSX: NEUTRON_NSX_CONFIG_FILES,
     OVS: NEUTRON_OVS_CONFIG_FILES,
     N1KV: NEUTRON_N1KV_CONFIG_FILES,
-    OVS_ODL: NEUTRON_OVS_ODL_CONFIG_FILES
+    OVS_ODL: NEUTRON_OVS_ODL_CONFIG_FILES,
+    ACI: NEUTRON_ACI_CONFIG_FILES
 }
 
 SERVICE_RENAMES = {
@@ -622,7 +654,7 @@ def resolve_config_files(plugin, release):
     '''
     config_files = deepcopy(CONFIG_FILES)
     drop_config = []
-    if plugin == OVS:
+    if plugin == OVS or plugin == ACI:
         # NOTE: deal with switch to ML2 plugin for >= icehouse
         drop_config = [NEUTRON_OVS_AGENT_CONF]
         if release >= 'mitaka':
@@ -835,7 +867,7 @@ def do_openstack_upgrade(configs):
 
 
 def configure_ovs():
-    if config('plugin') in [OVS, OVS_ODL]:
+    if config('plugin') in [OVS, OVS_ODL, ACI]:
         if not service_running('openvswitch-switch'):
             full_restart()
         add_bridge(INT_BRIDGE)

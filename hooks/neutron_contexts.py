@@ -33,6 +33,7 @@ OVS = 'ovs'
 N1KV = 'n1kv'
 NSX = 'nsx'
 OVS_ODL = 'ovs-odl'
+ACI = 'aci'
 
 NEUTRON = 'neutron'
 
@@ -41,6 +42,7 @@ CORE_PLUGIN = {
     N1KV: NEUTRON_N1KV_PLUGIN,
     NSX: NEUTRON_NSX_PLUGIN,
     OVS_ODL: NEUTRON_OVS_ODL_PLUGIN,
+    ACI: NEUTRON_ML2_PLUGIN
 }
 
 
