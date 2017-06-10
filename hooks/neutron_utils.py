@@ -1,5 +1,6 @@
 import os
 import shutil
+import socket
 import subprocess
 from shutil import copy2
 from charmhelpers.core.host import (
@@ -26,6 +27,7 @@ from charmhelpers.core.hookenv import (
     unit_private_ip,
     is_relation_made,
     relation_ids,
+    status_set,
 )
 from charmhelpers.core.templating import render
 from charmhelpers.fetch import (
@@ -79,6 +81,7 @@ from neutron_contexts import (
     NeutronGatewayContext,
     L3AgentContext,
 )
+import aci_opflex_context
 from charmhelpers.contrib.openstack.neutron import (
     parse_bridge_mappings,
 )
@@ -182,15 +185,16 @@ GATEWAY_PKGS = {
         "neutron-lbaas-agent",
     ],
     ACI: [
-        "neutron-plugin-openvswitch-agent",
         "openvswitch-switch",
         "neutron-dhcp-agent",
-        'python-mysqldb',
-        'python-psycopg2',
-        'python-oslo.config',  # Force upgrade
+        "neutron-ml2-driver-apic",
+        "python-mysqldb",
+        "python-psycopg2",
+        "python-oslo.config",  # Force upgrade
         "nova-api-metadata",
         "neutron-metering-agent",
-        "neutron-lbaas-agent",
+        "agent-ovs",
+        "neutron-opflex-agent",
     ],
 }
 
@@ -266,6 +270,10 @@ REQUIRED_INTERFACES = {
     'network-service': ['quantum-network-service'],
 }
 
+UNSUPPORTED_CONFIG_CHANGES = [
+    'aci-infra-vlan',
+    'aci-uplink-interface'
+]
 
 def get_early_packages():
     '''Return a list of package for pre-install based on configured plugin'''
@@ -350,6 +358,9 @@ NEUTRON_METERING_AGENT_CONF = "/etc/neutron/metering_agent.ini"
 NEUTRON_LBAAS_AGENT_CONF = "/etc/neutron/lbaas_agent.ini"
 NEUTRON_VPNAAS_AGENT_CONF = "/etc/neutron/vpn_agent.ini"
 NEUTRON_FWAAS_CONF = "/etc/neutron/fwaas_driver.ini"
+
+OPFLEX_CONFIG = "/etc/opflex-agent-ovs/conf.d/opflex-agent-ovs.conf"
+OPFLEX_SERVICES = ['agent-ovs', 'neutron-opflex-agent']
 
 NOVA_CONF_DIR = '/etc/nova'
 NOVA_CONF = "/etc/nova/nova.conf"
@@ -572,20 +583,20 @@ NEUTRON_N1KV_CONFIG_FILES = {
 NEUTRON_N1KV_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
 
 NEUTRON_ACI_CONFIG_FILES = {
+    OPFLEX_CONFIG: {
+        'services': OPFLEX_SERVICES,
+        'hook_contexts': [aci_opflex_context.AciOpflexConfigContext(),],
+    },
     NEUTRON_CONF: {
         'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
                           NeutronGatewayContext(),
+                          context.WorkerConfigContext(),
                           SyslogContext()],
-        'services': [ 'neutron-dhcp-agent',
-                     'neutron-metadata-agent']
-    },
-    NEUTRON_ML2_PLUGIN_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-plugin-openvswitch-agent']
+        'services': [ 'neutron-dhcp-agent', 'agent-ovs', 'neutron-opflex-agent']
     },
     NEUTRON_OVS_AGENT_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-openvswitch-agent']
+        'services': OPFLEX_SERVICES,
+        'hook_contexts': [aci_opflex_context.OVSPluginContext()],
     },
 }
 NEUTRON_ACI_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
@@ -738,6 +749,8 @@ def restart_map():
         if release >= 'newton' and 'neutron-lbaas-agent' in svcs:
             svcs.remove('neutron-lbaas-agent')
             svcs.add('neutron-lbaasv2-agent')
+        if plugin == "aci" and 'neutron-metadata-agent' in svcs:
+            svcs.remove('neutron-metadata-agent')
         if svcs:
             _map[f] = list(svcs)
     return _map
@@ -867,7 +880,7 @@ def do_openstack_upgrade(configs):
 
 
 def configure_ovs():
-    if config('plugin') in [OVS, OVS_ODL, ACI]:
+    if config('plugin') in [OVS, OVS_ODL]:
         if not service_running('openvswitch-switch'):
             full_restart()
         add_bridge(INT_BRIDGE)
@@ -891,6 +904,59 @@ def configure_ovs():
         # provided.
         service_restart('os-charm-phy-nic-mtu')
 
+    if config('plugin') in [ACI]:
+        conf = config()
+        for key in UNSUPPORTED_CONFIG_CHANGES:
+            if conf.changed(key):
+                log("Config change for %s not supported" % key, INFO)
+                return
+        if not service_running('openvswitch-switch'):
+            full_restart()
+        add_bridge(INT_BRIDGE)
+        add_bridge_port(INT_BRIDGE, config('aci-uplink-interface'), promisc=True)
+        create_opflex_interface()
+
+def create_opflex_interface():
+    conf = config()
+    status_set('maintenance', 'Configuring Opflex Interface')
+
+    infra_vlan = conf['aci-infra-vlan']
+    #infra_vlan = 3901
+    data_port = conf['aci-uplink-interface']
+    with open("/sys/class/net/%s/address" % data_port, 'r') as iffile:
+        data_port_mac = iffile.read()
+
+    with open('/etc/network/interfaces.d/opflex.cfg', 'w') as iffile:
+        content = """
+auto %s.%s
+iface %s.%s inet dhcp
+vlan-raw-device %s
+post-up /sbin/route -nv add -net 224.0.0.0/4 dev %s.%s
+""" % (data_port, infra_vlan, data_port, infra_vlan, data_port, data_port, infra_vlan)
+        iffile.write(content)
+
+    with open('/etc/dhcp/dhclient.conf', 'w') as iffile:
+        content = """
+interface "%s.%s" {
+   send host-name %s;
+   send dhcp-client-identifier 01:%s;
+}
+         """ % (data_port, infra_vlan, socket.gethostname(), data_port_mac.strip())
+        iffile.write(content)
+
+    cmd = ['/sbin/ifup', '%s.%s' % (data_port, infra_vlan)]
+    subprocess.check_call(cmd)
+
+    if conf['aci-encap'] == 'vxlan':
+        cmd = ['/usr/bin/ovs-vsctl', 'list-ports', 'br-int']
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        brlist = p.stdout.read().split('\n')
+
+        if not 'br-int_vxlan0' in brlist:
+            cmd = ['/usr/bin/ovs-vsctl', 'add-port', 'br-int', 'br-int_vxlan0', '--',
+                   'set', 'Interface', 'br-int_vxlan0', 'type=vxlan',
+                   'options:remote_ip=flow', 'options:key=flow', 'options:dst_port=8472']
+            subprocess.check_call(cmd)
 
 def copy_file(src, dst, perms=None, force=False):
     """Copy file to destination and optionally set permissionss.

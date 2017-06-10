@@ -80,6 +80,7 @@ options:
       Network configuration plugin to use for quantum.
       Supported values include:
 
+        aci - ML2plus + Opflex
         ovs - ML2 + Open vSwitch
         nsx - VMware NSX
         n1kv - Cisco N1kv
@@ -279,3 +280,43 @@ options:
     default: False
     description: |
       Enable metadata on an isolated network (no router ports).
+  aci-repo:
+    type: string
+    default: 'deb http://a.b.c.d'
+    description: "Apt repository for ACI module"
+  aci-repo-key:
+    type: string
+    default:
+    description: "Repo key, if missing no package authentication will be performed"
+  aci-apic-system-id:
+    type: string
+    default: 'openstack'
+    description: "As id string for this openstack instance"
+  aci-opflex-debug-level:
+    type: string
+    default: 'debug'
+    description: "Debug level"
+  aci-apic-system-id:
+    type: string
+    default:
+    description: "Apic system id"
+  aci-encap:
+    type: string
+    default: vxlan
+    description: "vlan or vxlan"
+  aci-infra-vlan:
+    type: int
+    default: 4093
+    description: "ACI infra vlan"
+  aci-opflex-peer-ip:
+    type: string
+    default: '10.0.0.30'
+    description: "Opflex peer ip on ACI."
+  aci-opflex-remote-ip:
+    type: string
+    default: '10.0.0.32'
+    description: "Opflex remote ip"
+  aci-uplink-interface:
+    type: string
+    default:
+    description: ""

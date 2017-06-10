@@ -24,6 +24,7 @@ from charmhelpers.contrib.network.ip import (
 )
 
 NEUTRON_ML2_PLUGIN = "ml2"
+NEUTRON_ACI_PLUGIN = "ml2plus"
 NEUTRON_N1KV_PLUGIN = \
     "neutron.plugins.cisco.n1kv.n1kv_neutron_plugin.N1kvNeutronPluginV2"
 NEUTRON_NSX_PLUGIN = "vmware"
@@ -42,7 +43,7 @@ CORE_PLUGIN = {
     N1KV: NEUTRON_N1KV_PLUGIN,
     NSX: NEUTRON_NSX_PLUGIN,
     OVS_ODL: NEUTRON_OVS_ODL_PLUGIN,
-    ACI: NEUTRON_ML2_PLUGIN
+    ACI: NEUTRON_ACI_PLUGIN
 }
 
 

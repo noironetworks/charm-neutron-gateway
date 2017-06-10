@@ -1,6 +1,9 @@
 #!/usr/bin/python
 
 from base64 import b64decode
+import subprocess
+
+from charmhelpers import fetch
 
 from charmhelpers.core.hookenv import (
     log, ERROR, WARNING,
@@ -9,9 +12,11 @@ from charmhelpers.core.hookenv import (
     relation_set,
     relation_ids,
     Hooks,
+    unit_get,
     UnregisteredHookError,
     status_set,
 )
+
 from charmhelpers.core.host import service_restart
 from charmhelpers.core.unitdata import kv
 from charmhelpers.fetch import (
@@ -33,6 +38,7 @@ from charmhelpers.contrib.hahelpers.apache import(
 from charmhelpers.contrib.openstack.utils import (
     config_value_changed,
     configure_installation_source,
+    get_host_ip,
     openstack_upgrade_available,
     os_requires_version,
     pausable_restart_on_change as restart_on_change,
@@ -45,6 +51,7 @@ from charmhelpers.contrib.charmsupport import nrpe
 from charmhelpers.contrib.hardening.harden import harden
 
 import sys
+from neutron_contexts import get_shared_secret
 from neutron_utils import (
     L3HA_PACKAGES,
     register_configs,
@@ -90,6 +97,25 @@ def install():
     status_set('maintenance', 'Installing apt packages')
     apt_update(fatal=True)
     apt_install('python-six', fatal=True)  # Force upgrade
+    if config('plugin') == 'aci':
+        conf = config()
+
+        opt = ['--option=Dpkg::Options::=--force-confdef' ,'--option=Dpkg::Options::=--force-confold']
+        if 'aci-repo-key' in conf.keys():
+            fetch.add_source(conf['aci-repo'], key=conf['aci-repo-key'])
+        else:
+            fetch.add_source(conf['aci-repo'])
+            opt.append('--allow-unauthenticated')
+
+        fetch.apt_update(fatal=True)
+        fetch.apt_upgrade(fatal=True)
+        fetch.apt_install(['neutron-common', 'neutron-server', 'python-apicapi'], options=opt, fatal=True)
+        fetch.apt_install(['openvswitch-switch', 'agent-ovs', 'neutron-opflex-agent'], options=opt, fatal=True)
+        fetch.apt_install(['neutron-ml2-driver-apic'], options=opt, fatal=True)
+
+        cmd = ['touch', '/etc/neutron/plugin.ini']
+        subprocess.check_call(cmd)
+
     if valid_plugin():
         apt_install(filter_installed_packages(get_early_packages()),
                     fatal=True)
@@ -103,6 +129,16 @@ def install():
         status_set('blocked', message)
         sys.exit(1)
 
+    if config('plugin') == 'aci':
+        apt_install('neutron-lbaas-agent', fatal=False)
+
+        cmd = ['/bin/systemctl', 'stop', 'neutron-metadata-agent']
+        subprocess.check_call(cmd)
+
+        cmd = ['/bin/systemctl', 'disable', 'neutron-metadata-agent']
+        subprocess.check_call(cmd)
+
+
     # Legacy HA for Icehouse
     update_legacy_ha_files()
 
@@ -112,7 +148,7 @@ def install():
 
 
 @hooks.hook('config-changed')
-@restart_on_change(restart_map())
+@restart_on_change(restart_map=restart_map(), stopstart=True)
 @harden()
 def config_changed():
     global CONFIGS
@@ -189,7 +225,7 @@ def amqp_joined(relation_id=None):
 
 @hooks.hook('amqp-nova-relation-departed')
 @hooks.hook('amqp-nova-relation-changed')
-@restart_on_change(restart_map())
+@restart_on_change(restart_map=restart_map(), stopstart=True)
 def amqp_nova_changed():
     if 'amqp-nova' not in CONFIGS.complete_contexts():
         log('amqp relation incomplete. Peer not ready?')
@@ -198,7 +234,7 @@ def amqp_nova_changed():
 
 
 @hooks.hook('amqp-relation-departed')
-@restart_on_change(restart_map())
+@restart_on_change(restart_map=restart_map(), stopstart=True)
 def amqp_departed():
     if 'amqp' not in CONFIGS.complete_contexts():
         log('amqp relation incomplete. Peer not ready?')
@@ -209,13 +245,13 @@ def amqp_departed():
 @hooks.hook('amqp-relation-changed',
             'cluster-relation-changed',
             'cluster-relation-joined')
-@restart_on_change(restart_map())
+@restart_on_change(restart_map=restart_map(), stopstart=True)
 def amqp_changed():
     CONFIGS.write_all()
 
 
 @hooks.hook('neutron-plugin-api-relation-changed')
-@restart_on_change(restart_map())
+@restart_on_change(restart_map=restart_map(), stopstart=True)
 def neutron_plugin_api_changed():
     if use_l3ha():
         apt_update()
@@ -223,8 +259,16 @@ def neutron_plugin_api_changed():
     CONFIGS.write_all()
 
 
+@hooks.hook('quantum-network-service-relation-joined')
+def qns_joined(relation_id=None):
+    settings = {}
+    settings['metadata_shared_secret'] = get_shared_secret()
+    settings['metadata_ip'] = get_host_ip(unit_get('private-address'))
+
+    relation_set(relation_id=relation_id, **settings)
+
 @hooks.hook('quantum-network-service-relation-changed')
-@restart_on_change(restart_map())
+@restart_on_change(restart_map=restart_map(), stopstart=True)
 def nm_changed():
     CONFIGS.write_all()
     if relation_get('ca_cert'):
@@ -249,7 +293,7 @@ def nm_changed():
 
 
 @hooks.hook("cluster-relation-departed")
-@restart_on_change(restart_map())
+@restart_on_change(restart_map=restart_map(), stopstart=True)
 def cluster_departed():
     if config('plugin') in ['nvp', 'nsx']:
         log('Unable to re-assign agent resources for'
@@ -283,7 +327,7 @@ def zeromq_configuration_relation_joined(relid=None):
 
 
 @hooks.hook('zeromq-configuration-relation-changed')
-@restart_on_change(restart_map(), stopstart=True)
+@restart_on_change(restart_map=restart_map(), stopstart=True)
 def zeromq_configuration_relation_changed():
     CONFIGS.write_all()
 
