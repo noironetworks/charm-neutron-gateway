@@ -98,20 +98,18 @@ def install():
     apt_update(fatal=True)
     apt_install('python-six', fatal=True)  # Force upgrade
     if config('plugin') == 'aci':
-        conf = config()
-
         opt = ['--option=Dpkg::Options::=--force-confdef' ,'--option=Dpkg::Options::=--force-confold']
-        if 'aci-repo-key' in conf.keys():
-            fetch.add_source(conf['aci-repo'], key=conf['aci-repo-key'])
+        if config('aci-repo-key'):
+            fetch.add_source(config('aci-repo'), key=config('aci-repo-key'))
         else:
-            fetch.add_source(conf['aci-repo'])
+            fetch.add_source(config('aci-repo'))
             opt.append('--allow-unauthenticated')
 
         fetch.apt_update(fatal=True)
         fetch.apt_upgrade(fatal=True)
         fetch.apt_install(['neutron-common', 'neutron-server', 'python-apicapi'], options=opt, fatal=True)
         fetch.apt_install(['openvswitch-switch', 'agent-ovs', 'neutron-opflex-agent'], options=opt, fatal=True)
-        fetch.apt_install(['neutron-ml2-driver-apic'], options=opt, fatal=True)
+        #fetch.apt_install(['neutron-ml2-driver-apic'], options=opt, fatal=True)
 
         cmd = ['touch', '/etc/neutron/plugin.ini']
         subprocess.check_call(cmd)
@@ -130,7 +128,7 @@ def install():
         sys.exit(1)
 
     if config('plugin') == 'aci':
-        apt_install('neutron-lbaas-agent', fatal=False)
+        apt_install('neutron-lbaasv2-agent', fatal=False)
 
         cmd = ['/bin/systemctl', 'stop', 'neutron-metadata-agent']
         subprocess.check_call(cmd)

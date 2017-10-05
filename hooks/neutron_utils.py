@@ -187,7 +187,6 @@ GATEWAY_PKGS = {
     ACI: [
         "openvswitch-switch",
         "neutron-dhcp-agent",
-        "neutron-ml2-driver-apic",
         "python-mysqldb",
         "python-psycopg2",
         "python-oslo.config",  # Force upgrade
@@ -751,6 +750,10 @@ def restart_map():
             svcs.add('neutron-lbaasv2-agent')
         if plugin == "aci" and 'neutron-metadata-agent' in svcs:
             svcs.remove('neutron-metadata-agent')
+        if plugin == "aci" and 'neutron-lbaas-agent' in svcs:
+            svcs.remove('neutron-lbaas-agent')
+        if plugin == "aci" and 'neutron-lbaasv2-agent' in svcs:
+            svcs.remove('neutron-lbaasv2-agent')
         if svcs:
             _map[f] = list(svcs)
     return _map
@@ -909,7 +912,6 @@ def configure_ovs():
         for key in UNSUPPORTED_CONFIG_CHANGES:
             if conf.changed(key):
                 log("Config change for %s not supported" % key, INFO)
-                return
         if not service_running('openvswitch-switch'):
             full_restart()
         add_bridge(INT_BRIDGE)
