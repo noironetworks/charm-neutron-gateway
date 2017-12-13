@@ -28,7 +28,7 @@ class AciOpflexConfigContext(context.OSContextGenerator):
         ctxt['aci_infra_vlan'] = config('aci-infra-vlan')
         ctxt['opflex_remote_ip'] = config('aci-opflex-remote-ip')
         if config('aci-encap') == "vxlan":
-            ctxt['opflex_encap_iface'] = 'br-int_vxlan0'
+            ctxt['opflex_encap_iface'] = 'br-fab_vxlan0'
         else:
             ctxt['opflex_encap_iface'] = ''
 

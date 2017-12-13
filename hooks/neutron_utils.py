@@ -856,13 +856,13 @@ interface "%s.%s" {
     subprocess.check_call(cmd)
 
     if conf['aci-encap'] == 'vxlan':
-        cmd = ['/usr/bin/ovs-vsctl', 'list-ports', 'br-int']
+        cmd = ['/usr/bin/ovs-vsctl', 'list-ports', 'br-fabric']
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         brlist = p.stdout.read().split('\n')
 
-        if not 'br-int_vxlan0' in brlist:
-            cmd = ['/usr/bin/ovs-vsctl', 'add-port', 'br-int', 'br-int_vxlan0', '--',
-                   'set', 'Interface', 'br-int_vxlan0', 'type=vxlan',
+        if not 'br-fab_vxlan0' in brlist:
+            cmd = ['/usr/bin/ovs-vsctl', 'add-port', 'br-fabric', 'br-fab_vxlan0', '--',
+                   'set', 'Interface', 'br-fab_vxlan0', 'type=vxlan',
                    'options:remote_ip=flow', 'options:key=flow', 'options:dst_port=8472']
             subprocess.check_call(cmd)
 
