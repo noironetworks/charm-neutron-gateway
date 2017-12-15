@@ -667,7 +667,10 @@ def restart_map():
     return _map
 
 
-INT_BRIDGE = "br-int"
+if config('plugin') in [ACI]:
+   INT_BRIDGE = "br-fabric"
+else:
+   INT_BRIDGE = "br-int"
 EXT_BRIDGE = "br-ex"
 
 DHCP_AGENT = "DHCP Agent"
