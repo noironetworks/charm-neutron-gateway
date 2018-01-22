@@ -379,7 +379,7 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
             expected['service_username'] = 'nova'
         else:
             # Juno or earlier
-            expected['service_username'] = 's3_ec2_nova'
+            expected['service_username'] = 's3_nova_ec2'
 
         ret = u.validate_relation_data(unit, relation, expected)
         if ret:
