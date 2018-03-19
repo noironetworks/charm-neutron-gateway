@@ -790,7 +790,7 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
             'quantum-network-service',
             'neutron-gateway:quantum-network-service')
         ep = self.keystone.service_catalog.url_for(service_type='identity',
-                                                   interface='publicURL')
+                                                   interface='adminURL')
 
         expected = {
             'DEFAULT': {
