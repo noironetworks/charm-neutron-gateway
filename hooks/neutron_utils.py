@@ -28,6 +28,8 @@ from charmhelpers.fetch import (
 from charmhelpers.contrib.network.ovs import (
     add_bridge,
     add_bridge_port,
+    is_linuxbridge_interface,
+    add_ovsbridge_linuxbridge,
     full_restart
 )
 from charmhelpers.contrib.hahelpers.cluster import (
@@ -722,7 +724,10 @@ def configure_ovs():
 
             for port, _br in portmaps.items():
                 if _br == br:
-                    add_bridge_port(br, port, promisc=True)
+                    if not is_linuxbridge_interface(port):
+                        add_bridge_port(br, port, promisc=True)
+                    else:
+                        add_ovsbridge_linuxbridge(br, port)
 
         # Ensure this runs so that mtu is applied to data-port interfaces if
         # provided.

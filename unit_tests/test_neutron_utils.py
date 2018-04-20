@@ -21,6 +21,8 @@ TO_PATCH = [
     'log',
     'add_bridge',
     'add_bridge_port',
+    'add_ovsbridge_linuxbridge',
+    'is_linuxbridge_interface',
     'headers_package',
     'full_restart',
     'os_release',
@@ -198,6 +200,7 @@ class TestNeutronUtils(CharmTestCase):
 
     @patch('charmhelpers.contrib.openstack.context.config')
     def test_configure_ovs_ovs_data_port(self, mock_config):
+        self.is_linuxbridge_interface.return_value = False
         mock_config.side_effect = self.test_config.get
         self.config.side_effect = self.test_config.get
         self.test_config.set('plugin', 'ovs')
@@ -242,6 +245,26 @@ class TestNeutronUtils(CharmTestCase):
         calls = [call('br1', 'eth0.100', promisc=True),
                  call('br1', 'eth0.200', promisc=True)]
         self.add_bridge_port.assert_has_calls(calls, any_order=True)
+
+    @patch('charmhelpers.contrib.openstack.context.config')
+    def test_configure_ovs_ovs_data_port_bridge(self, mock_config):
+        self.is_linuxbridge_interface.return_value = True
+        mock_config.side_effect = self.test_config.get
+        self.config.side_effect = self.test_config.get
+        self.test_config.set('plugin', 'ovs')
+        self.ExternalPortContext.return_value = \
+            DummyExternalPortContext(return_value=None)
+        # Test back-compatibility i.e. port but no bridge (so br-data is
+        # assumed)
+        self.test_config.set('data-port', 'br-eth0')
+        neutron_utils.configure_ovs()
+        self.add_bridge.assert_has_calls([
+            call('br-int'),
+            call('br-ex'),
+            call('br-data')
+        ])
+        calls = [call('br-data', 'br-eth0')]
+        self.add_ovsbridge_linuxbridge.assert_has_calls(calls)
 
     @patch.object(neutron_utils, 'register_configs')
     @patch('charmhelpers.contrib.openstack.templating.OSConfigRenderer')
