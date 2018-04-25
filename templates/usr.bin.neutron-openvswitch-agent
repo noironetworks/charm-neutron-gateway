@@ -6,6 +6,7 @@
   #include <abstractions/base>
   #include <abstractions/python>
   #include <abstractions/nameservice>
+  #include <abstractions/bash>
 
   /usr/bin/neutron-openvswitch-agent r,
 
@@ -39,6 +40,7 @@
   /{,s}bin/ps Ux,
 
   /tmp/* rw,
+  /tmp/** rw,
   /var/tmp/* a,
 
   # Required for parsing of managed process cmdline arguments
@@ -52,6 +54,7 @@
 {% if ubuntu_release <= '12.04' %}
   /proc/*/mounts r,
   /proc/*/status r,
+  /proc/*/stat r,
   /proc/*/ns/net r,
 {% else %}
   owner @{PROC}/@{pid}/mounts r,
