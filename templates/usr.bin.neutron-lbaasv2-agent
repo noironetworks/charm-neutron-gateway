@@ -2,7 +2,7 @@
 # Mode: {{aa_profile_mode}}
 #include <tunables/global>
 
-/usr/bin/neutron-lbaasv2-agent {
+/usr/bin/neutron-lbaasv2-agent flags=(attach_disconnected) {
   #include <abstractions/base>
   #include <abstractions/python>
   #include <abstractions/nameservice>
@@ -52,4 +52,7 @@
   owner @{PROC}/@{pid}/status r,
   owner @{PROC}/@{pid}/stat r,
   owner @{PROC}/@{pid}/ns/net r,
+  # Allow subprocess stat for management of haproxy instances
+  # which are owned by 'nobody'
+  @{PROC}/*/stat r,
 }
