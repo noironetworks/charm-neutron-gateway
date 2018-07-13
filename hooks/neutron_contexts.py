@@ -1,15 +1,10 @@
 # vim: set ts=4:et
 import os
 import uuid
-import socket
 from charmhelpers.core.hookenv import (
     config,
     unit_get,
-    cached,
     network_get_primary_address,
-)
-from charmhelpers.fetch import (
-    apt_install,
 )
 from charmhelpers.contrib.openstack.context import (
     OSContextGenerator,
@@ -21,6 +16,7 @@ from charmhelpers.contrib.hahelpers.cluster import(
 )
 from charmhelpers.contrib.network.ip import (
     get_address_in_network,
+    get_host_ip,
 )
 
 NEUTRON_ML2_PLUGIN = "ml2"
@@ -77,6 +73,8 @@ class L3AgentContext(OSContextGenerator):
             ctxt['agent_mode'] = 'dvr_snat'
         else:
             ctxt['agent_mode'] = 'legacy'
+        ctxt['rpc_response_timeout'] = api_settings['rpc_response_timeout']
+        ctxt['report_interval'] = api_settings['report_interval']
         return ctxt
 
 
@@ -91,11 +89,16 @@ class NeutronGatewayContext(NeutronAPIContext):
             'debug': config('debug'),
             'verbose': config('verbose'),
             'instance_mtu': config('instance-mtu'),
+            'dns_servers': config('dns-servers'),
             'l2_population': api_settings['l2_population'],
             'enable_dvr': api_settings['enable_dvr'],
             'enable_l3ha': api_settings['enable_l3ha'],
+            'extension_drivers': api_settings['extension_drivers'],
+            'dns_domain': api_settings['dns_domain'],
             'overlay_network_type':
             api_settings['overlay_network_type'],
+            'rpc_response_timeout': api_settings['rpc_response_timeout'],
+            'report_interval': api_settings['report_interval'],
             'enable_metadata_network': config('enable-metadata-network'),
             'enable_isolated_metadata': config('enable-isolated-metadata'),
         }
@@ -143,24 +146,6 @@ class NeutronGatewayContext(NeutronAPIContext):
             ctxt['enable_isolated_metadata'] = True
 
         return ctxt
-
-
-@cached
-def get_host_ip(hostname=None):
-    try:
-        import dns.resolver
-    except ImportError:
-        apt_install('python-dnspython', fatal=True)
-        import dns.resolver
-    hostname = hostname or unit_get('private-address')
-    try:
-        # Test to see if already an IPv4 address
-        socket.inet_aton(hostname)
-        return hostname
-    except socket.error:
-        answers = dns.resolver.query(hostname, 'A')
-        if answers:
-            return answers[0].address
 
 
 SHARED_SECRET = "/etc/{}/secret.txt"

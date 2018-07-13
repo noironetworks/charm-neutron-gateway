@@ -1,6 +1,4 @@
 import amulet
-import os
-import yaml
 import time
 import subprocess
 import json
@@ -17,6 +15,9 @@ from charmhelpers.contrib.openstack.amulet.utils import (
     # ERROR
 )
 
+from charmhelpers.contrib.openstack.utils import (
+    CompareOpenStackReleases,
+)
 # Use DEBUG to turn on debug logging
 u = OpenStackAmuletUtils(DEBUG)
 
@@ -24,12 +25,11 @@ u = OpenStackAmuletUtils(DEBUG)
 class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
     """Amulet tests on a basic neutron-gateway deployment."""
 
-    def __init__(self, series, openstack=None, source=None, git=False,
+    def __init__(self, series, openstack=None, source=None,
                  stable=True):
         """Deploy the entire test environment."""
         super(NeutronGatewayBasicDeployment, self).__init__(series, openstack,
                                                             source, stable)
-        self.git = git
         self._add_services()
         self._add_relations()
         self._configure_services()
@@ -90,64 +90,14 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
             'rabbitmq-server:amqp': 'neutron-openvswitch:amqp',
             'nova-compute:image-service': 'glance:image-service',
             'nova-cloud-controller:image-service': 'glance:image-service',
+            'neutron-api:neutron-plugin-api': 'neutron-gateway:'
+                                              'neutron-plugin-api',
         }
         super(NeutronGatewayBasicDeployment, self)._add_relations(relations)
 
     def _configure_services(self):
         """Configure all of the services."""
         neutron_gateway_config = {'aa-profile-mode': 'enforce'}
-        if self.git:
-            amulet_http_proxy = os.environ.get('AMULET_HTTP_PROXY')
-
-            branch = 'stable/' + self._get_openstack_release_string()
-
-            if self._get_openstack_release() >= self.trusty_kilo:
-                openstack_origin_git = {
-                    'repositories': [
-                        {'name': 'requirements',
-                         'repository': 'git://github.com/openstack/requirements',  # noqa
-                         'branch': branch},
-                        {'name': 'neutron-fwaas',
-                         'repository': 'git://github.com/openstack/neutron-fwaas',  # noqa
-                         'branch': branch},
-                        {'name': 'neutron-lbaas',
-                         'repository': 'git://github.com/openstack/neutron-lbaas',  # noqa
-                         'branch': branch},
-                        {'name': 'neutron-vpnaas',
-                         'repository': 'git://github.com/openstack/neutron-vpnaas',  # noqa
-                         'branch': branch},
-                        {'name': 'neutron',
-                         'repository': 'git://github.com/openstack/neutron',
-                         'branch': branch},
-                    ],
-                    'directory': '/mnt/openstack-git',
-                    'http_proxy': amulet_http_proxy,
-                    'https_proxy': amulet_http_proxy,
-                }
-            else:
-                reqs_repo = 'git://github.com/openstack/requirements'
-                neutron_repo = 'git://github.com/openstack/neutron'
-                if self._get_openstack_release() == self.trusty_icehouse:
-                    reqs_repo = 'git://github.com/coreycb/requirements'
-                    neutron_repo = 'git://github.com/coreycb/neutron'
-
-                openstack_origin_git = {
-                    'repositories': [
-                        {'name': 'requirements',
-                         'repository': reqs_repo,
-                         'branch': branch},
-                        {'name': 'neutron',
-                         'repository': neutron_repo,
-                         'branch': branch},
-                    ],
-                    'directory': '/mnt/openstack-git',
-                    'http_proxy': amulet_http_proxy,
-                    'https_proxy': amulet_http_proxy,
-                }
-
-            neutron_gateway_config['openstack-origin-git'] = \
-                yaml.dump(openstack_origin_git)
-
         keystone_config = {
             'admin-password': 'openstack',
             'admin-token': 'ubuntutesting',
@@ -205,19 +155,12 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
         self.neutron_api_sentry = self.d.sentry['neutron-api'][0]
 
         # Authenticate admin with keystone
-        self.keystone = u.authenticate_keystone_admin(self.keystone_sentry,
-                                                      user='admin',
-                                                      password='openstack',
-                                                      tenant='admin')
+        self.keystone_session, self.keystone = u.get_default_keystone_session(
+            self.keystone_sentry,
+            openstack_release=self._get_openstack_release())
 
         # Authenticate admin with neutron
-        ep = self.keystone.service_catalog.url_for(service_type='identity',
-                                                   endpoint_type='publicURL')
-        self.neutron = neutronclient.Client(auth_url=ep,
-                                            username='admin',
-                                            password='openstack',
-                                            tenant_name='admin',
-                                            region_name='RegionOne')
+        self.neutron = neutronclient.Client(session=self.keystone_session)
 
     def get_private_address(self, unit):
         """Return the private address of the given sentry unit."""
@@ -237,6 +180,7 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
         if self._get_openstack_release() <= self.trusty_icehouse:
             neutron_services.append('neutron-vpn-agent')
         if self._get_openstack_release() >= self.trusty_mitaka:
+            neutron_services.append('neutron-l3-agent')
             # neutron-plugin-openvswitch-agent -> neutron-openvswitch-agent
             neutron_services.remove('neutron-plugin-openvswitch-agent')
             neutron_services.append('neutron-openvswitch-agent')
@@ -270,7 +214,10 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
         }
         actual = self.keystone.service_catalog.get_endpoints()
 
-        ret = u.validate_svc_catalog_endpoint_data(expected, actual)
+        ret = u.validate_svc_catalog_endpoint_data(
+            expected,
+            actual,
+            openstack_release=self._get_openstack_release())
         if ret:
             amulet.raise_status(amulet.FAIL, msg=ret)
 
@@ -287,8 +234,13 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
             'publicurl': u.valid_url,
             'service_id': u.not_null
         }
-        ret = u.validate_endpoint_data(endpoints, admin_port, internal_port,
-                                       public_port, expected)
+        ret = u.validate_endpoint_data(
+            endpoints,
+            admin_port,
+            internal_port,
+            public_port,
+            expected,
+            openstack_release=self._get_openstack_release())
 
         if ret:
             amulet.raise_status(amulet.FAIL,
@@ -369,12 +321,15 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
             'service_tenant_name': 'services'
         }
 
-        if self._get_openstack_release() >= self.trusty_kilo:
+        if self._get_openstack_release() >= self.xenial_ocata:
+            # Ocata or later
+            expected['service_username'] = 'nova_placement'
+        elif self._get_openstack_release() >= self.trusty_kilo:
             # Kilo or later
             expected['service_username'] = 'nova'
         else:
             # Juno or earlier
-            expected['service_username'] = 's3_ec2_nova'
+            expected['service_username'] = 'ec2_nova_s3'
 
         ret = u.validate_relation_data(unit, relation, expected)
         if ret:
@@ -539,14 +494,26 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
                 'debug': 'False',
                 'core_plugin': 'ml2',
                 'control_exchange': 'neutron',
-                'notification_driver': 'neutron.openstack.common.notifier.'
-                                       'rpc_notifier',
+                'notification_driver': 'messaging',
             },
             'agent': {
                 'root_helper': 'sudo /usr/bin/neutron-rootwrap '
                                '/etc/neutron/rootwrap.conf'
             }
         }
+
+        if self._get_openstack_release() >= self.trusty_mitaka:
+            del expected['DEFAULT']['control_exchange']
+            del expected['DEFAULT']['notification_driver']
+            connection_uri = (
+                "rabbit://neutron:{}@{}:5672/"
+                "openstack".format(rmq_ng_rel['password'],
+                                   rmq_ng_rel['hostname'])
+            )
+            expected['oslo_messaging_notifications'] = {
+                'driver': 'messagingv2',
+                'transport_url': connection_uri
+            }
 
         if self._get_openstack_release() >= self.trusty_kilo:
             # Kilo or later
@@ -600,7 +567,7 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
                 },
                 'agent': {
                     'tunnel_types': 'gre',
-                    'l2_population': 'False'
+                    'l2_population': 'True'
                 },
                 'securitygroup': {
                     'firewall_driver': 'neutron.agent.linux.iptables_firewall.'
@@ -616,7 +583,7 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
                 },
                 'agent': {
                     'tunnel_types': 'gre',
-                    'l2_population': 'False'
+                    'l2_population': 'True'
                 },
                 'securitygroup': {
                     'firewall_driver': 'neutron.agent.linux.iptables_firewall.'
@@ -635,10 +602,18 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
         u.log.debug('Checking neutron gateway dhcp agent config file data...')
         unit = self.neutron_gateway_sentry
         conf = '/etc/neutron/dhcp_agent.ini'
+
+        cmp_os_release = CompareOpenStackReleases(
+            self._get_openstack_release_string()
+        )
+        if cmp_os_release >= 'mitaka':
+            interface_driver = 'openvswitch'
+        else:
+            interface_driver = ('neutron.agent.linux.interface.'
+                                'OVSInterfaceDriver')
         expected = {
             'state_path': '/var/lib/neutron',
-            'interface_driver': 'neutron.agent.linux.interface.'
-                                'OVSInterfaceDriver',
+            'interface_driver': interface_driver,
             'dhcp_driver': 'neutron.agent.linux.dhcp.Dnsmasq',
             'root_helper': 'sudo /usr/bin/neutron-rootwrap '
                            '/etc/neutron/rootwrap.conf',
@@ -662,7 +637,11 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
         }
         section = 'fwaas'
 
-        if self._get_openstack_release() >= self.trusty_kilo:
+        if self._get_openstack_release() >= self.xenial_newton:
+            # Newton or later
+            expected['driver'] = 'iptables'
+            expected['agent_version'] = 'v1'
+        elif self._get_openstack_release() >= self.trusty_kilo:
             # Kilo or later
             expected['driver'] = ('neutron_fwaas.services.firewall.drivers.'
                                   'linux.iptables_fwaas.IptablesFwaasDriver')
@@ -680,33 +659,25 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
         """Verify the data in the l3 agent config file."""
         u.log.debug('Checking neutron gateway l3 agent config file data...')
         unit = self.neutron_gateway_sentry
-        ncc_ng_rel = self.nova_cc_sentry.relation(
-            'quantum-network-service',
-            'neutron-gateway:quantum-network-service')
-        ep = self.keystone.service_catalog.url_for(service_type='identity',
-                                                   endpoint_type='publicURL')
 
         conf = '/etc/neutron/l3_agent.ini'
+
+        cmp_os_release = CompareOpenStackReleases(
+            self._get_openstack_release_string()
+        )
+        if cmp_os_release >= 'mitaka':
+            interface_driver = 'openvswitch'
+        else:
+            interface_driver = ('neutron.agent.linux.interface.'
+                                'OVSInterfaceDriver')
         expected = {
-            'interface_driver': 'neutron.agent.linux.interface.'
-                                'OVSInterfaceDriver',
-            'auth_url': ep,
-            'auth_region': 'RegionOne',
-            'admin_tenant_name': 'services',
-            'admin_password': ncc_ng_rel['service_password'],
+            'interface_driver': interface_driver,
             'root_helper': 'sudo /usr/bin/neutron-rootwrap '
                            '/etc/neutron/rootwrap.conf',
             'ovs_use_veth': 'True',
             'handle_internal_only_routers': 'True'
         }
         section = 'DEFAULT'
-
-        if self._get_openstack_release() >= self.trusty_kilo:
-            # Kilo or later
-            expected['admin_user'] = 'nova'
-        else:
-            # Juno or earlier
-            expected['admin_user'] = 's3_ec2_nova'
 
         ret = u.validate_config_data(unit, conf, section, expected)
         if ret:
@@ -719,10 +690,17 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
 
         unit = self.neutron_gateway_sentry
         conf = '/etc/neutron/lbaas_agent.ini'
+        cmp_os_release = CompareOpenStackReleases(
+            self._get_openstack_release_string()
+        )
+        if cmp_os_release >= 'mitaka':
+            interface_driver = 'openvswitch'
+        else:
+            interface_driver = ('neutron.agent.linux.interface.'
+                                'OVSInterfaceDriver')
         expected = {
             'DEFAULT': {
-                'interface_driver': 'neutron.agent.linux.interface.'
-                                    'OVSInterfaceDriver',
+                'interface_driver': interface_driver,
                 'periodic_interval': '10',
                 'ovs_use_veth': 'False',
             },
@@ -759,18 +737,9 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
         u.log.debug('Checking neutron gateway metadata agent '
                     'config file data...')
         unit = self.neutron_gateway_sentry
-        ep = self.keystone.service_catalog.url_for(service_type='identity',
-                                                   endpoint_type='publicURL')
-        nova_cc_relation = self.nova_cc_sentry.relation(
-            'quantum-network-service',
-            'neutron-gateway:quantum-network-service')
 
         conf = '/etc/neutron/metadata_agent.ini'
         expected = {
-            'auth_url': ep,
-            'auth_region': 'RegionOne',
-            'admin_tenant_name': 'services',
-            'admin_password': nova_cc_relation['service_password'],
             'root_helper': 'sudo neutron-rootwrap '
                            '/etc/neutron/rootwrap.conf',
             'state_path': '/var/lib/neutron',
@@ -779,13 +748,6 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
             'cache_url': 'memory://?default_ttl=5'
         }
         section = 'DEFAULT'
-
-        if self._get_openstack_release() >= self.trusty_kilo:
-            # Kilo or later
-            expected['admin_user'] = 'nova'
-        else:
-            # Juno or earlier
-            expected['admin_user'] = 's3_ec2_nova'
 
         ret = u.validate_config_data(unit, conf, section, expected)
         if ret:
@@ -799,13 +761,15 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
                     'config file data...')
         unit = self.neutron_gateway_sentry
         conf = '/etc/neutron/metering_agent.ini'
+
+        interface_driver = ('neutron.agent.linux.interface.'
+                            'OVSInterfaceDriver')
         expected = {
             'driver': 'neutron.services.metering.drivers.iptables.'
                       'iptables_driver.IptablesMeteringDriver',
             'measure_interval': '30',
             'report_interval': '300',
-            'interface_driver': 'neutron.agent.linux.interface.'
-                                'OVSInterfaceDriver',
+            'interface_driver': interface_driver,
             'use_namespaces': 'True'
         }
         section = 'DEFAULT'
@@ -827,7 +791,7 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
             'quantum-network-service',
             'neutron-gateway:quantum-network-service')
         ep = self.keystone.service_catalog.url_for(service_type='identity',
-                                                   endpoint_type='publicURL')
+                                                   interface='adminURL')
 
         expected = {
             'DEFAULT': {
@@ -861,7 +825,7 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
                     'project_domain_name': 'default',
                     'user_domain_name': 'default',
                     'project_name': 'services',
-                    'username': 'nova',
+                    'username': nova_cc_relation['service_username'],
                     'password': nova_cc_relation['service_password'],
                     'auth_url': ep.split('/v')[0],
                     'region': 'RegionOne',
@@ -873,7 +837,7 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
                     'auth_strategy': 'keystone',
                     'url': nova_cc_relation['quantum_url'],
                     'admin_tenant_name': 'services',
-                    'admin_username': 'nova',
+                    'admin_username': nova_cc_relation['service_username'],
                     'admin_password': nova_cc_relation['service_password'],
                     'admin_auth_url': ep,
                     'service_metadata_proxy': 'True',
@@ -890,7 +854,7 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
                 'neutron_auth_strategy': 'keystone',
                 'neutron_url': nova_cc_relation['quantum_url'],
                 'neutron_admin_tenant_name': 'services',
-                'neutron_admin_username': 's3_ec2_nova',
+                'neutron_admin_username': nova_cc_relation['service_username'],
                 'neutron_admin_password': nova_cc_relation['service_password'],
                 'neutron_admin_auth_url': ep,
                 'service_neutron_metadata_proxy': 'True',
@@ -965,6 +929,28 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
         # Cleanup
         u.log.debug('Deleting neutron network...')
         self.neutron.delete_network(network['id'])
+
+    def test_401_enable_qos(self):
+        """Check qos settings set via neutron-api charm"""
+        if self._get_openstack_release() >= self.trusty_mitaka:
+            unit = self.neutron_gateway_sentry
+            set_default = {'enable-qos': 'False'}
+            set_alternate = {'enable-qos': 'True'}
+            self.d.configure('neutron-api', set_alternate)
+            time.sleep(60)
+            self._auto_wait_for_status(exclude_services=self.exclude_services)
+            config = u._get_config(
+                unit,
+                '/etc/neutron/plugins/ml2/openvswitch_agent.ini')
+            extensions = config.get('agent', 'extensions').split(',')
+            if 'qos' not in extensions:
+                message = "qos not in extensions"
+                amulet.raise_status(amulet.FAIL, msg=message)
+
+            u.log.debug('Setting QoS back to {}'.format(
+                set_default['enable-qos']))
+            self.d.configure('neutron-api', set_default)
+            u.log.debug('OK')
 
     def test_900_restart_on_config_change(self):
         """Verify that the specified services are restarted when the

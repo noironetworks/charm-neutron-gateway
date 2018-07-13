@@ -1,7 +1,5 @@
 import sys
 
-import yaml
-
 from mock import MagicMock, patch, call
 
 # python-apt is not installed as part of test-requirements but is imported by
@@ -10,12 +8,15 @@ sys.modules['apt'] = MagicMock()
 sys.modules['apt_pkg'] = MagicMock()
 
 import charmhelpers.core.hookenv as hookenv
-with patch('charmhelpers.contrib.hardening.harden.harden') as \
-        mock_dec:
-    mock_dec.side_effect = (lambda *dargs, **dkwargs: lambda f:
-                            lambda *args, **kwargs:
-                                f(*args, **kwargs))
-    import neutron_hooks as hooks
+with patch('charmhelpers.core.hookenv.config'):
+    with patch('neutron_utils.restart_map'):
+        with patch('neutron_utils.register_configs'):
+            with patch('charmhelpers.contrib.'
+                       'hardening.harden.harden') as mock_dec:
+                mock_dec.side_effect = (lambda *dargs, **dkwargs: lambda f:
+                                        lambda *args, **kwargs:
+                                        f(*args, **kwargs))
+                import neutron_hooks as hooks
 
 from test_utils import CharmTestCase
 
@@ -30,7 +31,6 @@ TO_PATCH = [
     'filter_installed_packages',
     'get_early_packages',
     'get_packages',
-    'git_install',
     'log',
     'do_openstack_upgrade',
     'openstack_upgrade_available',
@@ -58,6 +58,7 @@ TO_PATCH = [
     'service_restart',
     'is_unit_paused_set',
     'install_systemd_override',
+    'configure_apparmor',
 ]
 
 
@@ -82,7 +83,7 @@ class TestQuantumHooks(CharmTestCase):
         self.valid_plugin.return_value = True
         _pkgs = ['foo', 'bar']
         self.filter_installed_packages.return_value = _pkgs
-        self._call_hook('install.real')
+        self._call_hook('install')
         self.configure_installation_source.assert_called_with(
             'cloud:precise-havana'
         )
@@ -98,7 +99,7 @@ class TestQuantumHooks(CharmTestCase):
 
     def test_install_hook_precise_nocloudarchive(self):
         self.test_config.set('openstack-origin', 'distro')
-        self._call_hook('install.real')
+        self._call_hook('install')
         self.configure_installation_source.assert_called_with(
             'cloud:precise-icehouse'
         )
@@ -106,77 +107,35 @@ class TestQuantumHooks(CharmTestCase):
     @patch('sys.exit')
     def test_install_hook_invalid_plugin(self, _exit):
         self.valid_plugin.return_value = False
-        self._call_hook('install.real')
+        self._call_hook('install')
         self.assertTrue(self.log.called)
         _exit.assert_called_with(1)
 
-    @patch('neutron_utils.git_install_requested')
-    def test_install_hook_git(self, git_requested):
-        git_requested.return_value = True
-        self.valid_plugin.return_value = True
-        _pkgs = ['foo', 'bar']
-        self.filter_installed_packages.return_value = _pkgs
-        repo = 'cloud:trusty-juno'
-        openstack_origin_git = {
-            'repositories': [
-                {'name': 'requirements',
-                 'repository': 'git://git.openstack.org/openstack/requirements',  # noqa
-                 'branch': 'stable/juno'},
-                {'name': 'neutron',
-                 'repository': 'git://git.openstack.org/openstack/neutron',
-                 'branch': 'stable/juno'}
-            ],
-            'directory': '/mnt/openstack-git',
-        }
-        projects_yaml = yaml.dump(openstack_origin_git)
-        self.test_config.set('openstack-origin', repo)
-        self.test_config.set('openstack-origin-git', projects_yaml)
-        self._call_hook('install.real')
-        self.configure_installation_source.assert_called_with(
-            'cloud:trusty-juno'
-        )
-        self.apt_update.assert_called_with(fatal=True)
-        self.apt_install.assert_has_calls([
-            call(_pkgs, fatal=True),
-            call(_pkgs, fatal=True),
-        ])
-        self.assertTrue(self.get_early_packages.called)
-        self.assertTrue(self.get_packages.called)
-        self.git_install.assert_called_with(projects_yaml)
-        self.assertTrue(self.execd_preinstall.called)
-
-    @patch.object(hooks, 'git_install_requested')
-    def test_config_changed(self, git_requested):
+    def test_config_changed(self):
         def mock_relids(rel):
             return ['relid']
-        git_requested.return_value = False
         self.test_config.set('sysctl', '{ kernel.max_pid: "1337"}')
         self.openstack_upgrade_available.return_value = True
         self.valid_plugin.return_value = True
         self.relation_ids.side_effect = mock_relids
         _amqp_joined = self.patch('amqp_joined')
         _amqp_nova_joined = self.patch('amqp_nova_joined')
-        _zmq_joined = self.patch('zeromq_configuration_relation_joined')
         self._call_hook('config-changed')
         self.assertTrue(self.do_openstack_upgrade.called)
         self.assertTrue(self.configure_ovs.called)
         self.assertTrue(_amqp_joined.called)
         self.assertTrue(_amqp_nova_joined.called)
-        self.assertTrue(_zmq_joined.called)
         self.assertTrue(self.create_sysctl.called)
+        self.configure_apparmor.assert_called_with()
 
-    @patch.object(hooks, 'git_install_requested')
-    def test_config_changed_upgrade(self, git_requested):
-        git_requested.return_value = False
+    def test_config_changed_upgrade(self):
         self.openstack_upgrade_available.return_value = True
         self.valid_plugin.return_value = True
         self._call_hook('config-changed')
         self.assertTrue(self.do_openstack_upgrade.called)
         self.assertTrue(self.configure_ovs.called)
 
-    @patch.object(hooks, 'git_install_requested')
-    def test_config_changed_n1kv(self, git_requested):
-        git_requested.return_value = False
+    def test_config_changed_n1kv(self):
         self.openstack_upgrade_available.return_value = False
         self.valid_plugin.return_value = True
         self.filter_installed_packages.side_effect = lambda p: p
@@ -188,51 +147,11 @@ class TestQuantumHooks(CharmTestCase):
         self.apt_purge.assert_called_with('neutron-l3-agent')
 
     @patch('sys.exit')
-    @patch.object(hooks, 'git_install_requested')
-    def test_config_changed_invalid_plugin(self, git_requested, _exit):
-        git_requested.return_value = False
+    def test_config_changed_invalid_plugin(self, _exit):
         self.valid_plugin.return_value = False
         self._call_hook('config-changed')
         self.assertTrue(self.log.called)
         _exit.assert_called_with(1)
-
-    @patch.object(hooks, 'git_install_requested')
-    @patch.object(hooks, 'config_value_changed')
-    def test_config_changed_git(self, config_val_changed, git_requested):
-        def mock_relids(rel):
-            return ['relid']
-        git_requested.return_value = True
-        self.test_config.set('sysctl', '{ kernel.max_pid: "1337"}')
-        self.openstack_upgrade_available.return_value = True
-        self.valid_plugin.return_value = True
-        self.relation_ids.side_effect = mock_relids
-        _amqp_joined = self.patch('amqp_joined')
-        _amqp_nova_joined = self.patch('amqp_nova_joined')
-        _zmq_joined = self.patch('zeromq_configuration_relation_joined')
-        repo = 'cloud:trusty-juno'
-        openstack_origin_git = {
-            'repositories': [
-                {'name': 'requirements',
-                 'repository':
-                 'git://git.openstack.org/openstack/requirements',
-                 'branch': 'stable/juno'},
-                {'name': 'neutron',
-                 'repository': 'git://git.openstack.org/openstack/neutron',
-                 'branch': 'stable/juno'}
-            ],
-            'directory': '/mnt/openstack-git',
-        }
-        projects_yaml = yaml.dump(openstack_origin_git)
-        self.test_config.set('openstack-origin', repo)
-        self.test_config.set('openstack-origin-git', projects_yaml)
-        self._call_hook('config-changed')
-        self.git_install.assert_called_with(projects_yaml)
-        self.assertFalse(self.do_openstack_upgrade.called)
-        self.assertTrue(self.configure_ovs.called)
-        self.assertTrue(_amqp_joined.called)
-        self.assertTrue(_amqp_nova_joined.called)
-        self.assertTrue(_zmq_joined.called)
-        self.assertTrue(self.create_sysctl.called)
 
     def test_upgrade_charm(self):
         _install = self.patch('install')

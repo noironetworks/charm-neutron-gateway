@@ -6,6 +6,7 @@
   #include <abstractions/base>
   #include <abstractions/python>
   #include <abstractions/nameservice>
+  #include <abstractions/bash>
 
   /usr/bin/neutron-metering-agent r,
 
@@ -34,6 +35,7 @@
   /{,s}bin/ip Ux,
 
   /tmp/* rw,
+  /tmp/** rw,
   /var/tmp/* a,
 
   # Required for parsing of managed process cmdline arguments
@@ -51,6 +53,7 @@
 {% else %}
   owner @{PROC}/@{pid}/mounts r,
   owner @{PROC}/@{pid}/status r,
+  owner @{PROC}/@{pid}/stat r,
   owner @{PROC}/@{pid}/ns/net r,
 {% endif %}
 }

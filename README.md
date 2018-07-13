@@ -7,10 +7,6 @@ This charm is designed to be used in conjunction with the rest of the OpenStack
 related charms in the charm store to virtualize the network that Nova Compute
 instances plug into.
 
-It's designed as a replacement for nova-network; however it does not yet
-support all of the features of nova-network (such as multihost) so may not
-be suitable for all.
-
 Neutron supports a rich plugin/extension framework for propriety networking
 solutions and supports (in core) Nicira NVP, NEC, Cisco and others...
 
@@ -32,7 +28,9 @@ Neutron is deployed baked into these charms from install onwards:
 
     juju deploy nova-compute
     juju deploy --config config.yaml nova-cloud-controller
+    juju deploy neutron-api
     juju add-relation nova-compute nova-cloud-controller
+    juju add-relation neutron-api nova-cloud-controller
 
 The Neutron Gateway can then be added to the deploying:
 
@@ -40,6 +38,7 @@ The Neutron Gateway can then be added to the deploying:
     juju add-relation neutron-gateway mysql
     juju add-relation neutron-gateway rabbitmq-server
     juju add-relation neutron-gateway nova-cloud-controller
+    juju add-relation neutron-gateway neutron-api
 
 The gateway provides two key services; L3 network routing and DHCP services.
 

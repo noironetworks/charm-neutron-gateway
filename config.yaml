@@ -1,11 +1,11 @@
 options:
   debug:
-    default: False
     type: boolean
+    default: False
     description: Enable debug logging.
   verbose:
-    default: False
     type: boolean
+    default: False
     description: Enable verbose logging.
   use-syslog:
     type: boolean
@@ -13,73 +13,62 @@ options:
     description: |
       Setting this to True will allow supporting services to log to syslog.
   openstack-origin:
-    default: distro
     type: string
+    default: distro
     description: |
-      Repository from which to install.  May be one of the following:
+      Repository from which to install. May be one of the following:
       distro (default), ppa:somecustom/ppa, a deb url sources entry,
-      or a supported Cloud Archive release pocket.
-
-      Supported Cloud Archive sources include:
-
+      or a supported Ubuntu Cloud Archive, e.g.
+      .
       cloud:<series>-<openstack-release>
       cloud:<series>-<openstack-release>/updates
       cloud:<series>-<openstack-release>/staging
       cloud:<series>-<openstack-release>/proposed
-
-      For series=Precise we support cloud archives for openstack-release:
-         * icehouse
-
-      For series=Trusty we support cloud archives for openstack-release:
-         * juno
-         * kilo
-         * liberty
-         * mitaka
-        * newton
-
+      .
+      See https://wiki.ubuntu.com/OpenStack/CloudArchive for info on which
+      cloud archives are available and supported.
+      .
       NOTE: updating this setting to a source that is known to provide
-      a later version of OpenStack will trigger a software upgrade.
-  openstack-origin-git:
-    default:
-    type: string
+      a later version of OpenStack will trigger a software upgrade unless
+      action-managed-upgrade is set to True.
+  action-managed-upgrade:
+    type: boolean
+    default: False
     description: |
-      Specifies a default OpenStack release name, or a YAML dictionary
-      listing the git repositories to install from.
-
-      The default Openstack release name may be one of the following, where
-      the corresponding OpenStack github branch will be used:
-        * liberty
-        * mitaka
-        * newton
-        * master
-
-      The YAML must minimally include requirements, neutron-fwaas,
-      neutron-lbaas, neutron-vpnaas, and neutron repositories, and may
-      also include repositories for other dependencies:
-        repositories:
-        - {name: requirements,
-           repository: 'git://github.com/openstack/requirements',
-           branch: master}
-        - {name: neutron-fwaas,
-           repository: 'git://github.com/openstack/neutron-fwaas',
-           branch: master}
-        - {name: neutron-lbaas,
-           repository: 'git://github.com/openstack/neutron-lbaas',
-           branch: master}
-        - {name: neutron-vpnaas,
-           repository: 'git://github.com/openstack/neutron-vpnaas',
-           branch: master}
-        - {name: neutron,
-           repository: 'git://github.com/openstack/neutron',
-           branch: master}
-        release: master
-  plugin:
-    default: ovs
+      If True enables openstack upgrades for this charm via juju actions.
+      You will still need to set openstack-origin to the new repository but
+      instead of an upgrade running automatically across all units, it will
+      wait for you to execute the openstack-upgrade action for this charm on
+      each unit. If False it will revert to existing behavior of upgrading
+      all units on config change.
+  harden:
     type: string
+    default:
+    description: |
+      Apply system hardening. Supports a space-delimited list of modules
+      to run. Supported modules currently include os, ssh, apache and mysql.
+  rabbit-user:
+    type: string
+    description: RabbitMQ user
+    default: neutron
+  rabbit-vhost:
+    type: string
+    description: RabbitMQ Virtual Host
+    default: openstack
+  nova-rabbit-user:
+    type: string
+    description: RabbitMQ Nova user
+    default: nova
+  nova-rabbit-vhost:
+    type: string
+    description: RabbitMQ Nova Virtual Host
+    default: openstack
+  plugin:
+    type: string
+    default: ovs
     description: |
       Network configuration plugin to use for quantum.
       Supported values include:
-
         aci - ML2plus + Opflex
         ovs - ML2 + Open vSwitch
         nsx - VMware NSX
@@ -89,10 +78,10 @@ options:
     type: string
     default:
     description: |
-      Deprecated: Use bridge-mappings and data-port to create a network
-      which can be used for external connectivity.  You can call the network
+      [DEPRECATED] Use bridge-mappings and data-port to create a network
+      which can be used for external connectivity. You can call the network
       external and the bridge br-ex by convention, but neither is required.
-
+      .
       Space-delimited list of external ports to use for routing of instance
       traffic to the external public network. Valid values are either MAC
       addresses (in which case only MAC addresses for interfaces without an IP
@@ -129,28 +118,12 @@ options:
       Optional configuration to set the external-network-id. Only needed when
       configuring multiple external networks and should be used in conjunction
       with run-internal-router.
-  rabbit-user:
-    type: string
-    description: RabbitMQ user
-    default: neutron
-  rabbit-vhost:
-    type: string
-    description: RabbitMQ Virtual Host
-    default: openstack
-  nova-rabbit-user:
-    type: string
-    description: RabbitMQ Nova user
-    default: nova
-  nova-rabbit-vhost:
-    type: string
-    description: RabbitMQ Nova Virtual Host
-    default: openstack
   instance-mtu:
     type: int
     default:
     description: |
       Configure DHCP services to provide MTU configuration to instances
-      within the cloud.  This is useful in deployments where its not
+      within the cloud. This is useful in deployments where its not
       possible to increase MTU on switches and physical servers to
       accommodate the packet overhead of using GRE tunnels.
   dnsmasq-flags:
@@ -159,28 +132,27 @@ options:
     description: |
       Comma-separated list of key=value config flags with the additional
       dhcp options for neutron dnsmasq.
+  dns-servers:
+    type: string
+    default:
+    description: |
+     A comma-separated list of DNS servers which will be used by dnsmasq as
+     forwarders.
   enable-l3-agent:
     type: boolean
     default: True
     description: |
       Optional configuration to support use of linux router
       Note that this is used only for Cisco n1kv plugin.
-  nagios_context:
-    default: "juju"
-    type: string
+  worker-multiplier:
+    type: float
+    default:
     description: |
-      Used by the nrpe-external-master subordinate charm.
-      A string that will be prepended to instance name to set the host name
-      in Nagios. So for instance the hostname would be something like:
-          juju-myservice-0
-      If you're running multiple environments with the same services in them
-      this allows you to differentiate between them.
-  nagios_servicegroups:
-    default: ""
-    type: string
-    description: |
-      A comma-separated list of Nagios servicegroups.
-      If left empty, the nagios_context will be used as the servicegroup
+      The CPU core multiplier to use when configuring worker processes for
+      this service. By default, the number of workers for each daemon is
+      set to twice the number of CPU cores a service unit has. When deployed
+      in a LXD container, this default value will be capped to 4 workers
+      unless this configuration option is set.
   bridge-mappings:
     type: string
     default: 'physnet1:br-data'
@@ -200,23 +172,39 @@ options:
       <physical_network> specifying physical_network names usable for VLAN
       provider and tenant networks, as well as ranges of VLAN tags on each
       available for allocation to tenant networks.
-  # Network configuration options
-  # by default all access is over 'private-address'
-  os-data-network:
+  aa-profile-mode:
     type: string
-    default:
+    default: 'disable'
     description: |
-      The IP address and netmask of the OpenStack Data network (e.g.,
-      192.168.0.0/24)
-
-      This network will be used for tenant network traffic in overlay
-      networks.
+      Experimental enable apparmor profile. Valid settings: 'complain',
+      'enforce' or 'disable'. AA disabled by default.
+  enable-metadata-network:
+    type: boolean
+    default: False
+    description: |
+      The metadata network is used by solutions which do not leverage the l3
+      agent for providing access to the metadata service.
+  enable-isolated-metadata:
+    type: boolean
+    default: False
+    description: |
+      Enable metadata on an isolated network (no router ports).
   sysctl:
     type: string
     default:
     description: |
       YAML-formatted associative array of sysctl key/value pairs to be set
       persistently e.g. '{ kernel.pid_max : 4194303 }'.
+  # Network config (by default all access is over 'private-address')
+  os-data-network:
+    type: string
+    default:
+    description: |
+      The IP address and netmask of the OpenStack Data network (e.g.
+      192.168.0.0/24)
+      .
+      This network will be used for tenant network traffic in overlay
+      networks.
   # Legacy (Icehouse) HA
   ha-legacy-mode:
     type: boolean
@@ -240,46 +228,29 @@ options:
     description: |
       Default multicast port number that will be used to communicate between
       HA Cluster nodes.
-  action-managed-upgrade:
-    type: boolean
-    default: False
-    description: |
-      If True enables openstack upgrades for this charm via juju actions.
-      You will still need to set openstack-origin to the new repository but
-      instead of an upgrade running automatically across all units, it will
-      wait for you to execute the openstack-upgrade action for this charm on
-      each unit. If False it will revert to existing behavior of upgrading
-      all units on config change.
-  harden:
-    default:
+  # Monitoring config
+  nagios_context:
     type: string
+    default: "juju"
     description: |
-      Apply system hardening. Supports a space-delimited list of modules
-      to run. Supported modules currently include os, ssh, apache and mysql.
-  worker-multiplier:
-    type: float
-    default: 2.0
-    description: |
-      The CPU core multiplier to use when configuring worker processes for
-      neutron and nova-metadata-api. By default, the number of workers for
-      each daemon is set to twice the number of CPU cores a service unit has.
-  aa-profile-mode:
+      Used by the nrpe-external-master subordinate charm.
+      A string that will be prepended to instance name to set the host name
+      in Nagios. So for instance the hostname would be something like:
+          juju-myservice-0
+      If you're running multiple environments with the same services in them
+      this allows you to differentiate between them.
+  nagios_servicegroups:
     type: string
-    default: 'disable'
+    default: ""
     description: |
-      Experimental enable apparmor profile. Valid settings: 'complain', 'enforce' or 'disable'.
-      AA disabled by default.
-  enable-metadata-network:
-    type: boolean
-    default: False
+      A comma-separated list of Nagios service groups.
+      If left empty, the nagios_context will be used as the servicegroup
+  ipfix-target:
+    type: string
+    default: 
     description: |
-      The metadata network is used by solutions which do not leverage the l3
-      agent for providing access to the metadata service.
-  enable-isolated-metadata:
-    type: boolean
-    default: False
-    description: |
-      Enable metadata on an isolated network (no router ports).
+      IPFIX target wit the format "IP_Address:Port". This will enable IPFIX
+      exporting on all OVS bridges to the target, including br-int and br-ext.
   aci-repo:
     type: string
     default: 'deb http://a.b.c.d'

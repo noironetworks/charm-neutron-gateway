@@ -1,18 +1,19 @@
+
+import io
+
+from contextlib import contextmanager
+
 from mock import (
-    Mock,
     MagicMock,
     patch
 )
 import neutron_contexts
-import sys
-from contextlib import contextmanager
 
 from test_utils import (
     CharmTestCase
 )
 
 TO_PATCH = [
-    'apt_install',
     'config',
     'eligible_leader',
     'unit_get',
@@ -27,14 +28,14 @@ def patch_open():
 
     Yields the mock for "open" and "file", respectively.'''
     mock_open = MagicMock(spec=open)
-    mock_file = MagicMock(spec=file)
+    mock_file = MagicMock(spec=io.FileIO)
 
     @contextmanager
     def stub_open(*args, **kwargs):
         mock_open(*args, **kwargs)
         yield mock_file
 
-    with patch('__builtin__.open', stub_open):
+    with patch('builtins.open', stub_open):
         yield mock_open, mock_file
 
 
@@ -58,60 +59,83 @@ class TestL3AgentContext(CharmTestCase):
     @patch('neutron_contexts.NeutronAPIContext')
     def test_new_ext_network(self, _NeutronAPIContext):
         _NeutronAPIContext.return_value = \
-            DummyNeutronAPIContext(return_value={'enable_dvr': False})
+            DummyNeutronAPIContext(return_value={'enable_dvr': False,
+                                                 'report_interval': 30,
+                                                 'rpc_response_timeout': 60,
+                                                 })
         self.test_config.set('run-internal-router', 'none')
         self.test_config.set('external-network-id', '')
         self.eligible_leader.return_value = False
-        self.assertEquals(neutron_contexts.L3AgentContext()(),
-                          {'agent_mode': 'legacy',
-                           'external_configuration_new': True,
-                           'handle_internal_only_router': False,
-                           'plugin': 'ovs'})
+        self.assertEqual(neutron_contexts.L3AgentContext()(),
+                         {'agent_mode': 'legacy',
+                          'report_interval': 30,
+                          'rpc_response_timeout': 60,
+                          'external_configuration_new': True,
+                          'handle_internal_only_router': False,
+                          'plugin': 'ovs'})
 
     @patch('neutron_contexts.NeutronAPIContext')
     def test_old_ext_network(self, _NeutronAPIContext):
         _NeutronAPIContext.return_value = \
-            DummyNeutronAPIContext(return_value={'enable_dvr': False})
+            DummyNeutronAPIContext(return_value={'enable_dvr': False,
+                                                 'report_interval': 30,
+                                                 'rpc_response_timeout': 60,
+                                                 })
         self.test_config.set('run-internal-router', 'none')
         self.test_config.set('ext-port', 'eth1')
         self.eligible_leader.return_value = False
-        self.assertEquals(neutron_contexts.L3AgentContext()(),
-                          {'agent_mode': 'legacy',
-                           'handle_internal_only_router': False,
-                           'plugin': 'ovs'})
+        self.assertEqual(neutron_contexts.L3AgentContext()(),
+                         {'agent_mode': 'legacy',
+                          'report_interval': 30,
+                          'rpc_response_timeout': 60,
+                          'handle_internal_only_router': False,
+                          'plugin': 'ovs'})
 
     @patch('neutron_contexts.NeutronAPIContext')
     def test_hior_leader(self, _NeutronAPIContext):
         _NeutronAPIContext.return_value = \
-            DummyNeutronAPIContext(return_value={'enable_dvr': False})
+            DummyNeutronAPIContext(return_value={'enable_dvr': False,
+                                                 'report_interval': 30,
+                                                 'rpc_response_timeout': 60,
+                                                 })
         self.test_config.set('run-internal-router', 'leader')
         self.test_config.set('external-network-id', 'netid')
         self.eligible_leader.return_value = True
-        self.assertEquals(neutron_contexts.L3AgentContext()(),
-                          {'agent_mode': 'legacy',
-                           'handle_internal_only_router': True,
-                           'ext_net_id': 'netid',
-                           'plugin': 'ovs'})
+        self.assertEqual(neutron_contexts.L3AgentContext()(),
+                         {'agent_mode': 'legacy',
+                          'report_interval': 30,
+                          'rpc_response_timeout': 60,
+                          'handle_internal_only_router': True,
+                          'ext_net_id': 'netid',
+                          'plugin': 'ovs'})
 
     @patch('neutron_contexts.NeutronAPIContext')
     def test_hior_all(self, _NeutronAPIContext):
         _NeutronAPIContext.return_value = \
-            DummyNeutronAPIContext(return_value={'enable_dvr': False})
+            DummyNeutronAPIContext(return_value={'enable_dvr': False,
+                                                 'report_interval': 30,
+                                                 'rpc_response_timeout': 60,
+                                                 })
         self.test_config.set('run-internal-router', 'all')
         self.test_config.set('external-network-id', 'netid')
         self.eligible_leader.return_value = True
-        self.assertEquals(neutron_contexts.L3AgentContext()(),
-                          {'agent_mode': 'legacy',
-                           'handle_internal_only_router': True,
-                           'ext_net_id': 'netid',
-                           'plugin': 'ovs'})
+        self.assertEqual(neutron_contexts.L3AgentContext()(),
+                         {'agent_mode': 'legacy',
+                          'report_interval': 30,
+                          'rpc_response_timeout': 60,
+                          'handle_internal_only_router': True,
+                          'ext_net_id': 'netid',
+                          'plugin': 'ovs'})
 
     @patch('neutron_contexts.NeutronAPIContext')
     def test_dvr(self, _NeutronAPIContext):
         _NeutronAPIContext.return_value = \
-            DummyNeutronAPIContext(return_value={'enable_dvr': True})
-        self.assertEquals(neutron_contexts.L3AgentContext()()['agent_mode'],
-                          'dvr_snat')
+            DummyNeutronAPIContext(return_value={'enable_dvr': True,
+                                                 'report_interval': 30,
+                                                 'rpc_response_timeout': 60,
+                                                 })
+        self.assertEqual(neutron_contexts.L3AgentContext()()['agent_mode'],
+                         'dvr_snat')
 
 
 class TestNeutronGatewayContext(CharmTestCase):
@@ -131,13 +155,16 @@ class TestNeutronGatewayContext(CharmTestCase):
                  'enable-dvr': 'True',
                  'overlay-network-type': 'gre',
                  'enable-l3ha': 'True',
-                 'network-device-mtu': 9000}
+                 'enable-qos': 'True',
+                 'network-device-mtu': 9000,
+                 'dns-domain': 'openstack.example.'}
         self.test_config.set('plugin', 'ovs')
         self.test_config.set('debug', False)
         self.test_config.set('verbose', True)
         self.test_config.set('instance-mtu', 1420)
         self.test_config.set('dnsmasq-flags', 'dhcp-userclass=set:ipxe,iPXE,'
                                               'dhcp-match=set:ipxe,175')
+        self.test_config.set('dns-servers', '8.8.8.8,4.4.4.4')
         self.test_config.set('vlan-ranges',
                              'physnet1:1000:2000 physnet2:2001:3000')
         self.test_config.set('flat-network-providers', 'physnet3 physnet4')
@@ -149,10 +176,13 @@ class TestNeutronGatewayContext(CharmTestCase):
         _rget.side_effect = lambda *args, **kwargs: rdata
         _secret.return_value = 'testsecret'
         ctxt = neutron_contexts.NeutronGatewayContext()()
-        self.assertEquals(ctxt, {
+        self.assertEqual(ctxt, {
             'shared_secret': 'testsecret',
             'enable_dvr': True,
             'enable_l3ha': True,
+            'dns_servers': '8.8.8.8,4.4.4.4',
+            'extension_drivers': 'qos',
+            'dns_domain': 'openstack.example.',
             'local_ip': '10.5.0.1',
             'instance_mtu': 1420,
             'core_plugin': "ml2",
@@ -161,6 +191,8 @@ class TestNeutronGatewayContext(CharmTestCase):
             'verbose': True,
             'l2_population': True,
             'overlay_network_type': 'gre',
+            'report_interval': 30,
+            'rpc_response_timeout': 60,
             'bridge_mappings': 'physnet1:br-data',
             'network_providers': 'physnet3,physnet4',
             'vlan_ranges': 'physnet1:1000:2000,physnet2:2001:3000',
@@ -183,7 +215,9 @@ class TestNeutronGatewayContext(CharmTestCase):
                  'enable-dvr': 'True',
                  'overlay-network-type': 'gre',
                  'enable-l3ha': 'True',
-                 'network-device-mtu': 9000}
+                 'enable-qos': 'True',
+                 'network-device-mtu': 9000,
+                 'dns-domain': 'openstack.example.'}
         self.test_config.set('plugin', 'ovs')
         self.test_config.set('debug', False)
         self.test_config.set('verbose', True)
@@ -201,10 +235,13 @@ class TestNeutronGatewayContext(CharmTestCase):
         _rget.side_effect = lambda *args, **kwargs: rdata
         _secret.return_value = 'testsecret'
         ctxt = neutron_contexts.NeutronGatewayContext()()
-        self.assertEquals(ctxt, {
+        self.assertEqual(ctxt, {
             'shared_secret': 'testsecret',
             'enable_dvr': True,
             'enable_l3ha': True,
+            'dns_servers': None,
+            'extension_drivers': 'qos',
+            'dns_domain': 'openstack.example.',
             'local_ip': '192.168.20.2',
             'instance_mtu': 1420,
             'core_plugin': "ml2",
@@ -213,6 +250,8 @@ class TestNeutronGatewayContext(CharmTestCase):
             'verbose': True,
             'l2_population': True,
             'overlay_network_type': 'gre',
+            'report_interval': 30,
+            'rpc_response_timeout': 60,
             'bridge_mappings': 'physnet1:br-data',
             'network_providers': 'physnet3,physnet4',
             'vlan_ranges': 'physnet1:1000:2000,physnet2:2001:3000',
@@ -268,8 +307,8 @@ class TestSharedSecret(CharmTestCase):
         _path.exists.return_value = False
         _uuid4.return_value = 'secret_thing'
         with patch_open() as (_open, _file):
-            self.assertEquals(neutron_contexts.get_shared_secret(),
-                              'secret_thing')
+            self.assertEqual(neutron_contexts.get_shared_secret(),
+                             'secret_thing')
             _open.assert_called_with(
                 neutron_contexts.SHARED_SECRET.format('neutron'), 'w')
             _file.write.assert_called_with('secret_thing')
@@ -279,58 +318,10 @@ class TestSharedSecret(CharmTestCase):
         _path.exists.return_value = True
         with patch_open() as (_open, _file):
             _file.read.return_value = 'secret_thing\n'
-            self.assertEquals(neutron_contexts.get_shared_secret(),
-                              'secret_thing')
+            self.assertEqual(neutron_contexts.get_shared_secret(),
+                             'secret_thing')
             _open.assert_called_with(
                 neutron_contexts.SHARED_SECRET.format('neutron'), 'r')
-
-
-class TestHostIP(CharmTestCase):
-
-    def setUp(self):
-        super(TestHostIP, self).setUp(neutron_contexts,
-                                      TO_PATCH)
-        self.config.side_effect = self.test_config.get
-        self.network_get_primary_address.side_effect = NotImplementedError
-        # Save and inject
-        self.mods = {'dns': None, 'dns.resolver': None}
-        for mod in self.mods:
-            if mod not in sys.modules:
-                sys.modules[mod] = Mock()
-            else:
-                del self.mods[mod]
-
-    def tearDown(self):
-        super(TestHostIP, self).tearDown()
-        # Cleanup
-        for mod in self.mods.keys():
-            del sys.modules[mod]
-
-    def test_get_host_ip_already_ip(self):
-        self.assertEquals(neutron_contexts.get_host_ip('10.5.0.1'),
-                          '10.5.0.1')
-
-    def test_get_host_ip_noarg(self):
-        self.unit_get.return_value = "10.5.0.1"
-        self.assertEquals(neutron_contexts.get_host_ip(),
-                          '10.5.0.1')
-
-    @patch('dns.resolver.query')
-    def test_get_host_ip_hostname_unresolvable(self, _query):
-        class NXDOMAIN(Exception):
-            pass
-        _query.side_effect = NXDOMAIN()
-        self.assertRaises(NXDOMAIN, neutron_contexts.get_host_ip,
-                          'missing.example.com')
-
-    @patch('dns.resolver.query')
-    def test_get_host_ip_hostname_resolvable(self, _query):
-        data = MagicMock()
-        data.address = '10.5.0.1'
-        _query.return_value = [data]
-        self.assertEquals(neutron_contexts.get_host_ip('myhost.example.com'),
-                          '10.5.0.1')
-        _query.assert_called_with('myhost.example.com', 'A')
 
 
 class TestMisc(CharmTestCase):
@@ -342,5 +333,5 @@ class TestMisc(CharmTestCase):
 
     def test_core_plugin_ml2(self):
         self.config.return_value = 'ovs'
-        self.assertEquals(neutron_contexts.core_plugin(),
-                          neutron_contexts.NEUTRON_ML2_PLUGIN)
+        self.assertEqual(neutron_contexts.core_plugin(),
+                         neutron_contexts.NEUTRON_ML2_PLUGIN)

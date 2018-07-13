@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 from base64 import b64decode
 import subprocess
@@ -30,17 +30,14 @@ from charmhelpers.core.host import (
 )
 from charmhelpers.contrib.hahelpers.cluster import(
     get_hacluster_config,
-    eligible_leader
 )
 from charmhelpers.contrib.hahelpers.apache import(
     install_ca_cert
 )
 from charmhelpers.contrib.openstack.utils import (
-    config_value_changed,
     configure_installation_source,
     get_host_ip,
     openstack_upgrade_available,
-    os_requires_version,
     pausable_restart_on_change as restart_on_change,
     is_unit_paused_set,
 )
@@ -60,9 +57,6 @@ from neutron_utils import (
     do_openstack_upgrade,
     get_packages,
     get_early_packages,
-    get_topics,
-    git_install,
-    git_install_requested,
     valid_plugin,
     configure_ovs,
     stop_services,
@@ -71,7 +65,6 @@ from neutron_utils import (
     remove_legacy_ha_files,
     install_legacy_ha_files,
     cleanup_ovs_netns,
-    reassign_agent_resources,
     stop_neutron_ha_monitor_daemon,
     use_l3ha,
     NEUTRON_COMMON,
@@ -84,7 +77,7 @@ hooks = Hooks()
 CONFIGS = register_configs()
 
 
-@hooks.hook('install.real')
+@hooks.hook('install')
 @harden()
 def install():
     status_set('maintenance', 'Executing pre-install')
@@ -119,8 +112,6 @@ def install():
                     fatal=True)
         apt_install(filter_installed_packages(get_packages()),
                     fatal=True)
-        status_set('maintenance', 'Git install')
-        git_install(config('openstack-origin-git'))
     else:
         message = 'Please provide a valid plugin config'
         log(message, level=ERROR)
@@ -150,13 +141,7 @@ def install():
 @harden()
 def config_changed():
     global CONFIGS
-    if git_install_requested():
-        if config_value_changed('openstack-origin-git'):
-            status_set('maintenance', 'Running Git install')
-            git_install(config('openstack-origin-git'))
-            CONFIGS.write_all()
-
-    elif not config('action-managed-upgrade'):
+    if not config('action-managed-upgrade'):
         if openstack_upgrade_available(NEUTRON_COMMON):
             status_set('maintenance', 'Running openstack upgrade')
             do_openstack_upgrade(CONFIGS)
@@ -172,8 +157,6 @@ def config_changed():
         amqp_joined(relation_id=r_id)
     for r_id in relation_ids('amqp-nova'):
         amqp_nova_joined(relation_id=r_id)
-    for rid in relation_ids('zeromq-configuration'):
-        zeromq_configuration_relation_joined(rid)
     if valid_plugin():
         CONFIGS.write_all()
         configure_ovs()
@@ -184,12 +167,11 @@ def config_changed():
         status_set('blocked', message)
         sys.exit(1)
     if config('plugin') == 'n1kv':
-        if not git_install_requested():
-            if config('enable-l3-agent'):
-                status_set('maintenance', 'Installing apt packages')
-                apt_install(filter_installed_packages('neutron-l3-agent'))
-            else:
-                apt_purge('neutron-l3-agent')
+        if config('enable-l3-agent'):
+            status_set('maintenance', 'Installing apt packages')
+            apt_install(filter_installed_packages('neutron-l3-agent'))
+        else:
+            apt_purge('neutron-l3-agent')
 
     # Setup legacy ha configurations
     update_legacy_ha_files()
@@ -302,9 +284,6 @@ def cluster_departed():
         log('Unable to re-assign agent resources for failed nodes with n1kv',
             level=WARNING)
         return
-    if not config('ha-legacy-mode') and eligible_leader(None):
-        reassign_agent_resources()
-        CONFIGS.write_all()
 
 
 @hooks.hook('cluster-relation-broken')
@@ -314,20 +293,6 @@ def stop():
     if config('ha-legacy-mode'):
         # Cleanup ovs and netns for destroyed units.
         cleanup_ovs_netns()
-
-
-@hooks.hook('zeromq-configuration-relation-joined')
-@os_requires_version('kilo', NEUTRON_COMMON)
-def zeromq_configuration_relation_joined(relid=None):
-    relation_set(relation_id=relid,
-                 topics=" ".join(get_topics()),
-                 users="neutron nova")
-
-
-@hooks.hook('zeromq-configuration-relation-changed')
-@restart_on_change(restart_map=restart_map(), stopstart=True)
-def zeromq_configuration_relation_changed():
-    CONFIGS.write_all()
 
 
 @hooks.hook('nrpe-external-master-relation-joined',

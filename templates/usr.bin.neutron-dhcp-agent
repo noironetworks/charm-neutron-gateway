@@ -6,6 +6,7 @@
   #include <abstractions/base>
   #include <abstractions/python>
   #include <abstractions/nameservice>
+  #include <abstractions/bash>
 
   /usr/bin/neutron-dhcp-agent r,
 
@@ -37,6 +38,7 @@
   /{,s}bin/ip Ux,
 
   /tmp/* rw,
+  /tmp/** rw,
   /var/tmp/* a,
 
   # Required for parsing of managed process cmdline arguments
@@ -47,6 +49,9 @@
 
   /proc/version r,
 
+  # neutron-dhcp-agent needs to keep track of dnsmaq processes
+  /proc/*/stat r,
+
 {% if ubuntu_release <= '12.04' %}
   /proc/*/mounts r,
   /proc/*/status r,
@@ -54,6 +59,7 @@
 {% else %}
   owner @{PROC}/@{pid}/mounts r,
   owner @{PROC}/@{pid}/status r,
+  owner @{PROC}/@{pid}/stat r,
   owner @{PROC}/@{pid}/ns/net r,
 {% endif %}
 }

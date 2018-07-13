@@ -3,6 +3,7 @@ bin
 tags
 .tox
 .testrepository
+.stestr
 *.pyc
 *.sw[nop]
 *.pyc
@@ -11,3 +12,5 @@ trusty
 wily
 xenial
 .unit-state.db
+func-results.json
+__pycache__

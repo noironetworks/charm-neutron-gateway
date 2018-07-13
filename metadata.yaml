@@ -17,8 +17,9 @@ tags:
   - openstack
 series:
   - xenial
+  - bionic
+  - artful
   - trusty
-  - yakkety
 extra-bindings:
   data:
 provides:
@@ -32,9 +33,6 @@ requires:
     interface: rabbitmq
   amqp-nova:
     interface: rabbitmq
-  zeromq-configuration:
-    interface: zeromq-configuration
-    scope: container
   neutron-plugin-api:
     interface: neutron-plugin-api
   ha:
