@@ -846,7 +846,7 @@ interface "%s.%s" {
     if conf['aci-encap'] == 'vxlan':
         cmd = ['/usr/bin/ovs-vsctl', 'list-ports', 'br-fabric']
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        brlist = p.stdout.read().split('\n')
+        brlist = str(p.stdout.read()).split('\n')
 
         if not 'br-fab_vxlan0' in brlist:
             cmd = ['/usr/bin/ovs-vsctl', 'add-port', 'br-fabric', 'br-fab_vxlan0', '--',
