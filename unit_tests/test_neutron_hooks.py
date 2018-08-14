@@ -59,6 +59,8 @@ TO_PATCH = [
     'is_unit_paused_set',
     'install_systemd_override',
     'configure_apparmor',
+    'disable_nova_metadata',
+    'remove_legacy_nova_metadata',
 ]
 
 
@@ -112,6 +114,8 @@ class TestQuantumHooks(CharmTestCase):
         _exit.assert_called_with(1)
 
     def test_config_changed(self):
+        self.disable_nova_metadata.return_value = False
+
         def mock_relids(rel):
             return ['relid']
         self.test_config.set('sysctl', '{ kernel.max_pid: "1337"}')
@@ -129,6 +133,7 @@ class TestQuantumHooks(CharmTestCase):
         self.configure_apparmor.assert_called_with()
 
     def test_config_changed_upgrade(self):
+        self.disable_nova_metadata.return_value = False
         self.openstack_upgrade_available.return_value = True
         self.valid_plugin.return_value = True
         self._call_hook('config-changed')
@@ -148,6 +153,7 @@ class TestQuantumHooks(CharmTestCase):
 
     @patch('sys.exit')
     def test_config_changed_invalid_plugin(self, _exit):
+        self.disable_nova_metadata.return_value = False
         self.valid_plugin.return_value = False
         self._call_hook('config-changed')
         self.assertTrue(self.log.called)
@@ -202,6 +208,8 @@ class TestQuantumHooks(CharmTestCase):
         self.assertTrue(self.CONFIGS.write_all.called)
 
     def test_nm_changed(self):
+        self.disable_nova_metadata.return_value = False
+
         def _relation_get(key):
             data = {
                 'ca_cert': 'cert',
@@ -215,6 +223,8 @@ class TestQuantumHooks(CharmTestCase):
 
     def test_nm_changed_restart_nonce(self):
         '''Ensure first set of restart_trigger restarts nova-api-metadata'''
+        self.disable_nova_metadata.return_value = False
+
         def _relation_get(key):
             data = {
                 'ca_cert': 'cert',
@@ -237,6 +247,8 @@ class TestQuantumHooks(CharmTestCase):
 
     def test_nm_changed_restart_nonce_changed(self):
         '''Ensure change of restart_trigger restarts nova-api-metadata'''
+        self.disable_nova_metadata.return_value = False
+
         def _relation_get(key):
             data = {
                 'ca_cert': 'cert',
@@ -259,6 +271,9 @@ class TestQuantumHooks(CharmTestCase):
 
     def test_nm_changed_restart_nonce_nochange(self):
         '''Ensure no change in restart_trigger skips restarts'''
+        self.patch_object(hooks, 'disable_nova_metadata',
+                          return_value=False)
+
         def _relation_get(key):
             data = {
                 'ca_cert': 'cert',
@@ -277,6 +292,20 @@ class TestQuantumHooks(CharmTestCase):
         kv_mock.get.assert_called_with('restart_nonce')
         self.assertFalse(kv_mock.set.called)
         self.assertFalse(kv_mock.flush.called)
+
+    def test_nm_changed_disable_meta(self):
+        self.disable_nova_metadata.return_value = True
+
+        def _relation_get(key):
+            data = {
+                'ca_cert': 'cert',
+            }
+            return data.get(key)
+        self.relation_get.side_effect = _relation_get
+        self._call_hook('quantum-network-service-relation-changed')
+        self.assertTrue(self.CONFIGS.write_all.called)
+        self.install_ca_cert.assert_called_with('cert')
+        self.remove_legacy_nova_metadata.assert_called_once_with()
 
     def test_neutron_plugin_changed(self):
         self.use_l3ha.return_value = True
@@ -308,6 +337,8 @@ class TestQuantumHooks(CharmTestCase):
         self.assertTrue(self.stop_neutron_ha_monitor_daemon.called)
 
     def test_quantum_network_service_relation_changed(self):
+        self.patch_object(hooks, 'disable_nova_metadata',
+                          return_value=False)
         self.test_config.set('ha-legacy-mode', True)
         self._call_hook('quantum-network-service-relation-changed')
         self.assertTrue(self.cache_env_data.called)

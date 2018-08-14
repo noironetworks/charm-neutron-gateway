@@ -345,7 +345,14 @@ class TestNovaMetadataContext(CharmTestCase):
                                                    TO_PATCH)
         self.config.side_effect = self.test_config.get
 
-    def test_vendordata_static(self):
+    @patch.object(neutron_contexts, 'get_local_ip')
+    @patch.object(neutron_contexts, 'get_shared_secret')
+    @patch.object(neutron_contexts, 'relation_ids')
+    def test_vendordata_static(self, _relation_ids, _get_shared_secret,
+                               _get_local_ip):
+        _get_shared_secret.return_value = 'asecret'
+        _get_local_ip.return_value = '127.0.0.1'
+        _relation_ids.return_value = []
         _vdata = '{"good": "json"}'
         self.os_release.return_value = 'pike'
 
@@ -355,7 +362,14 @@ class TestNovaMetadataContext(CharmTestCase):
         self.assertTrue(ctxt['vendor_data'])
         self.assertEqual(ctxt['vendordata_providers'], ['StaticJSON'])
 
-    def test_vendordata_dynamic(self):
+    @patch.object(neutron_contexts, 'get_local_ip')
+    @patch.object(neutron_contexts, 'get_shared_secret')
+    @patch.object(neutron_contexts, 'relation_ids')
+    def test_vendordata_dynamic(self, _relation_ids, _get_shared_secret,
+                                _get_local_ip):
+        _get_shared_secret.return_value = 'asecret'
+        _get_local_ip.return_value = '127.0.0.1'
+        _relation_ids.return_value = []
         _vdata_url = 'http://example.org/vdata'
         self.os_release.return_value = 'pike'
 
@@ -365,7 +379,14 @@ class TestNovaMetadataContext(CharmTestCase):
         self.assertEqual(ctxt['vendor_data_url'], _vdata_url)
         self.assertEqual(ctxt['vendordata_providers'], ['DynamicJSON'])
 
-    def test_vendordata_static_and_dynamic(self):
+    @patch.object(neutron_contexts, 'get_local_ip')
+    @patch.object(neutron_contexts, 'get_shared_secret')
+    @patch.object(neutron_contexts, 'relation_ids')
+    def test_vendordata_static_and_dynamic(self, _relation_ids,
+                                           _get_shared_secret, _get_local_ip):
+        _get_shared_secret.return_value = 'asecret'
+        _get_local_ip.return_value = '127.0.0.1'
+        _relation_ids.return_value = []
         _vdata = '{"good": "json"}'
         _vdata_url = 'http://example.org/vdata'
         self.os_release.return_value = 'pike'
@@ -379,11 +400,66 @@ class TestNovaMetadataContext(CharmTestCase):
         self.assertEqual(ctxt['vendordata_providers'], ['StaticJSON',
                                                         'DynamicJSON'])
 
-    def test_vendordata_mitaka(self):
+    @patch.object(neutron_contexts, 'get_local_ip')
+    @patch.object(neutron_contexts, 'get_shared_secret')
+    @patch.object(neutron_contexts, 'relation_ids')
+    def test_vendordata_mitaka(self, _relation_ids, _get_shared_secret,
+                               _get_local_ip):
+        _get_shared_secret.return_value = 'asecret'
+        _get_local_ip.return_value = '127.0.0.1'
+        _relation_ids.return_value = []
         _vdata_url = 'http://example.org/vdata'
         self.os_release.return_value = 'mitaka'
 
         self.test_config.set('vendor-data-url', _vdata_url)
         ctxt = neutron_contexts.NovaMetadataContext()()
+        self.assertEqual(
+            ctxt,
+            {
+                'nova_metadata_host': '127.0.0.1',
+                'nova_metadata_port': '8775',
+                'nova_metadata_protocol': 'http',
+                'shared_secret': 'asecret',
+                'vendordata_providers': []})
 
-        self.assertEqual(ctxt, {'vendordata_providers': []})
+    @patch.object(neutron_contexts, 'relation_get')
+    @patch.object(neutron_contexts, 'related_units')
+    @patch.object(neutron_contexts, 'relation_ids')
+    def test_NovaMetadataContext(self, _relation_ids, _related_units,
+                                 _relation_get):
+        _relation_ids.return_value = ['rid:1']
+        _related_units.return_value = ['nova-cloud-contoller/0']
+        _relation_get.return_value = {
+            'nova-metadata-host': '10.0.0.10',
+            'nova-metadata-port': '8775',
+            'nova-metadata-protocol': 'http',
+            'shared-metadata-secret': 'auuid'}
+        self.os_release.return_value = 'queens'
+
+        self.assertEqual(
+            neutron_contexts.NovaMetadataContext()(),
+            {
+                'nova_metadata_host': '10.0.0.10',
+                'nova_metadata_port': '8775',
+                'nova_metadata_protocol': 'http',
+                'shared_secret': 'auuid',
+                'vendordata_providers': []})
+
+    @patch.object(neutron_contexts, 'get_local_ip')
+    @patch.object(neutron_contexts, 'get_shared_secret')
+    @patch.object(neutron_contexts, 'relation_ids')
+    def test_NovaMetadataContext_legacy(self, _relation_ids,
+                                        _get_shared_secret,
+                                        _get_local_ip):
+        _relation_ids.return_value = []
+        _get_shared_secret.return_value = 'buuid'
+        _get_local_ip.return_value = '127.0.0.1'
+        self.os_release.return_value = 'pike'
+        self.assertEqual(
+            neutron_contexts.NovaMetadataContext()(),
+            {
+                'nova_metadata_host': '127.0.0.1',
+                'nova_metadata_port': '8775',
+                'nova_metadata_protocol': 'http',
+                'shared_secret': 'buuid',
+                'vendordata_providers': []})

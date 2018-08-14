@@ -69,6 +69,8 @@ from neutron_utils import (
     write_vendordata,
     pause_unit_helper,
     resume_unit_helper,
+    remove_legacy_nova_metadata,
+    disable_nova_metadata,
 )
 
 hooks = Hooks()
@@ -149,6 +151,9 @@ def config_changed():
 
     # Setup legacy ha configurations
     update_legacy_ha_files()
+    # Disable nova metadata if possible,
+    if disable_nova_metadata():
+        remove_legacy_nova_metadata()
 
 
 @hooks.hook('upgrade-charm')
@@ -224,18 +229,22 @@ def nm_changed():
     if config('ha-legacy-mode'):
         cache_env_data()
 
-    # NOTE: nova-api-metadata needs to be restarted
-    #       once the nova-conductor is up and running
-    #       on the nova-cc units.
-    restart_nonce = relation_get('restart_trigger')
-    if restart_nonce is not None:
-        db = kv()
-        previous_nonce = db.get('restart_nonce')
-        if previous_nonce != restart_nonce:
-            if not is_unit_paused_set():
-                service_restart('nova-api-metadata')
-            db.set('restart_nonce', restart_nonce)
-            db.flush()
+    # Disable nova metadata if possible,
+    if disable_nova_metadata():
+        remove_legacy_nova_metadata()
+    else:
+        # NOTE: nova-api-metadata needs to be restarted
+        #       once the nova-conductor is up and running
+        #       on the nova-cc units.
+        restart_nonce = relation_get('restart_trigger')
+        if restart_nonce is not None:
+            db = kv()
+            previous_nonce = db.get('restart_nonce')
+            if previous_nonce != restart_nonce:
+                if not is_unit_paused_set():
+                    service_restart('nova-api-metadata')
+                db.set('restart_nonce', restart_nonce)
+                db.flush()
 
 
 @hooks.hook("cluster-relation-departed")

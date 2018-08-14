@@ -6,6 +6,7 @@ from shutil import copy2
 from charmhelpers.core.host import (
     lsb_release,
     mkdir,
+    service,
     service_running,
     service_stop,
     service_restart,
@@ -20,6 +21,8 @@ from charmhelpers.core.hookenv import (
     config,
     is_relation_made,
     relation_ids,
+    related_units,
+    relation_get,
 )
 from charmhelpers.fetch import (
     apt_upgrade,
@@ -83,7 +86,6 @@ from copy import deepcopy
 
 def valid_plugin():
     return config('plugin') in CORE_PLUGIN
-
 
 NEUTRON_COMMON = 'neutron-common'
 VERSION_PACKAGE = NEUTRON_COMMON
@@ -269,6 +271,8 @@ def get_packages():
             # LBaaS v1 dropped in newton
             packages.remove('neutron-lbaas-agent')
             packages.append('neutron-lbaasv2-agent')
+    if disable_nova_metadata(cmp_os_source):
+        packages.remove('nova-api-metadata')
     packages.extend(determine_l3ha_packages())
 
     if cmp_os_source >= 'rocky':
@@ -294,7 +298,6 @@ def determine_l3ha_packages():
 
 def use_l3ha():
     return NeutronAPIContext()()['enable_l3ha']
-
 
 EXT_PORT_CONF = '/etc/init/ext-port.conf'
 PHY_NIC_MTU_CONF = '/etc/init/os-charm-phy-nic-mtu.conf'
@@ -351,7 +354,8 @@ NEUTRON_SHARED_CONFIG_FILES = {
     NEUTRON_METADATA_AGENT_CONF: {
         'hook_contexts': [NetworkServiceContext(),
                           context.WorkerConfigContext(),
-                          NeutronGatewayContext()],
+                          NeutronGatewayContext(),
+                          NovaMetadataContext()],
         'services': ['neutron-metadata-agent']
     },
     NEUTRON_DHCP_AA_PROFILE_PATH: {
@@ -619,21 +623,24 @@ def resolve_config_files(plugin, release):
     else:
         drop_config.extend([NEUTRON_LBAAS_AA_PROFILE_PATH])
 
+    if disable_nova_metadata(cmp_os_release):
+        drop_config.extend(NOVA_CONFIG_FILES.keys())
+    else:
+        if is_relation_made('amqp-nova'):
+            amqp_nova_ctxt = context.AMQPContext(
+                ssl_dir=NOVA_CONF_DIR,
+                rel_name='amqp-nova',
+                relation_prefix='nova')
+        else:
+            amqp_nova_ctxt = context.AMQPContext(
+                ssl_dir=NOVA_CONF_DIR,
+                rel_name='amqp')
+        config_files[plugin][NOVA_CONF][
+            'hook_contexts'].append(amqp_nova_ctxt)
+
     for _config in drop_config:
         if _config in config_files[plugin]:
             config_files[plugin].pop(_config)
-
-    if is_relation_made('amqp-nova'):
-        amqp_nova_ctxt = context.AMQPContext(
-            ssl_dir=NOVA_CONF_DIR,
-            rel_name='amqp-nova',
-            relation_prefix='nova')
-    else:
-        amqp_nova_ctxt = context.AMQPContext(
-            ssl_dir=NOVA_CONF_DIR,
-            rel_name='amqp')
-    config_files[plugin][NOVA_CONF][
-        'hook_contexts'].append(amqp_nova_ctxt)
     return config_files
 
 
@@ -841,6 +848,37 @@ def update_legacy_ha_files(force=False):
         remove_legacy_ha_files()
 
 
+def remove_legacy_nova_metadata():
+    """Remove nova metadata files."""
+    service_name = 'nova-api-metadata'
+    service_stop(service_name)
+    service('disable', service_name)
+    service('mask', service_name)
+    for f in NOVA_CONFIG_FILES.keys():
+        remove_file(f)
+
+
+def disable_nova_metadata(cmp_os_source=None):
+    """Check whether nova mnetadata service should be disabled."""
+    if not cmp_os_source:
+        cmp_os_source = CompareOpenStackReleases(os_release('neutron-common'))
+    if cmp_os_source >= 'rocky':
+        secret = None
+        for name in ['quantum', 'neutron']:
+            for rid in relation_ids('{}-network-service'.format(name)):
+                for unit in related_units(rid):
+                    rdata = relation_get(rid=rid, unit=unit)
+                    # The presence of the secret shows the
+                    # nova-cloud-controller charm is running a metadata
+                    # service so it can be disabled locally.
+                    if rdata.get('shared-metadata-secret'):
+                        secret = rdata.get('shared-metadata-secret')
+        disable = bool(secret)
+    else:
+        disable = False
+    return disable
+
+
 def cache_env_data():
     env = NetworkServiceContext()()
     if not env:
@@ -1009,7 +1047,6 @@ def configure_apparmor():
         profiles.append(NEUTRON_LBAASV2_AA_PROFILE)
     for profile in profiles:
         context.AppArmorContext(profile).setup_aa_profile()
-
 
 VENDORDATA_FILE = '/etc/nova/vendor_data.json'
 
