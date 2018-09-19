@@ -21,6 +21,9 @@ TO_PATCH = [
     'apt_update',
     'apt_upgrade',
     'apt_install',
+    'apt_autoremove',
+    'apt_purge',
+    'filter_missing_packages',
     'configure_installation_source',
     'log',
     'add_bridge',
@@ -147,6 +150,33 @@ class TestNeutronUtils(CharmTestCase):
         self.assertFalse('neutron-lbaas-agent' in packages)
         self.assertFalse('python-mysqldb' in packages)
         self.assertTrue('python-pymysql' in packages)
+
+    def test_get_packages_ovs_rocky(self):
+        self.config.return_value = 'ovs'
+        self.os_release.return_value = 'rocky'
+        packages = neutron_utils.get_packages()
+        self.assertEqual(
+            len(packages),
+            len([p for p in packages if not p.startswith('python-')])
+        )
+
+    def test_get_purge_packages_ovs(self):
+        self.config.return_value = 'ovs'
+        self.os_release.return_value = 'queens'
+        self.assertEqual([], neutron_utils.get_purge_packages())
+
+    def test_get_purge_packages_ovs_rocky(self):
+        self.config.return_value = 'ovs'
+        self.os_release.return_value = 'rocky'
+        self.assertEqual([
+            'python-mysqldb',
+            'python-psycopg2',
+            'python-oslo.config',
+            'python-nova',
+            'python-neutron',
+            'python-neutron-fwaas'],
+            neutron_utils.get_purge_packages()
+        )
 
     def test_get_packages_ovsodl_icehouse(self):
         self.config.return_value = 'ovs-odl'
@@ -297,6 +327,7 @@ class TestNeutronUtils(CharmTestCase):
         self.test_config.set('plugin', 'ovs')
         self.get_os_codename_install_source.return_value = 'havana'
         self.os_release.return_value = 'havana'
+        self.filter_missing_packages.side_effect = lambda x: x
         neutron_utils.do_openstack_upgrade(mock_configs)
         mock_register_configs.assert_called_with('havana')
         self.assertTrue(self.log.called)
@@ -310,6 +341,42 @@ class TestNeutronUtils(CharmTestCase):
         )
         self.configure_installation_source.assert_called_with(
             'cloud:precise-havana'
+        )
+        self.apt_purge.assert_not_called()
+        self.apt_autoremove.assert_not_called()
+
+    @patch.object(neutron_utils, 'register_configs')
+    @patch('charmhelpers.contrib.openstack.templating.OSConfigRenderer')
+    def test_do_openstack_upgrade_rocky(self, mock_renderer,
+                                        mock_register_configs):
+        mock_configs = MagicMock()
+        mock_register_configs.return_value = mock_configs
+        self.config.side_effect = self.test_config.get
+        self.is_relation_made.return_value = False
+        self.test_config.set('openstack-origin', 'cloud:bionic-rocky')
+        self.test_config.set('plugin', 'ovs')
+        self.get_os_codename_install_source.return_value = 'rocky'
+        self.os_release.return_value = 'rocky'
+        self.filter_missing_packages.side_effect = lambda x: x
+        neutron_utils.do_openstack_upgrade(mock_configs)
+        mock_register_configs.assert_called_with('rocky')
+        self.assertTrue(self.log.called)
+        self.apt_update.assert_called_with(fatal=True)
+        dpkg_opts = [
+            '--option', 'Dpkg::Options::=--force-confnew',
+            '--option', 'Dpkg::Options::=--force-confdef',
+        ]
+        self.apt_upgrade.assert_called_with(
+            options=dpkg_opts, fatal=True, dist=True
+        )
+        self.apt_purge.assert_called_with(
+            neutron_utils.PURGE_PACKAGES, fatal=True
+        )
+        self.apt_autoremove.assert_called_with(
+            purge=True, fatal=True
+        )
+        self.configure_installation_source.assert_called_with(
+            'cloud:bionic-rocky'
         )
 
     @patch('charmhelpers.contrib.openstack.templating.OSConfigRenderer')

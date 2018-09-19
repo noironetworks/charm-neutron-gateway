@@ -25,6 +25,9 @@ from charmhelpers.fetch import (
     apt_upgrade,
     apt_update,
     apt_install,
+    apt_autoremove,
+    apt_purge,
+    filter_missing_packages,
 )
 from charmhelpers.contrib.network.ovs import (
     add_bridge,
@@ -176,6 +179,21 @@ GATEWAY_PKGS = {
     ],
 }
 
+PURGE_PACKAGES = [
+    'python-mysqldb',
+    'python-psycopg2',
+    'python-oslo.config',
+    'python-nova',
+    'python-neutron',
+    'python-neutron-fwaas',
+]
+
+PY3_PACKAGES = [
+    'python3-nova',
+    'python3-neutron',
+    'python3-neutron-fwaas',
+]
+
 EARLY_PACKAGES = {
     OVS: ['openvswitch-datapath-dkms'],
     NSX: [],
@@ -253,7 +271,19 @@ def get_packages():
             packages.append('neutron-lbaasv2-agent')
     packages.extend(determine_l3ha_packages())
 
+    if cmp_os_source >= 'rocky':
+        packages = [p for p in packages if not p.startswith('python-')]
+        packages.extend(PY3_PACKAGES)
+
     return packages
+
+
+def get_purge_packages():
+    '''Return a list of packages to purge for the current OS release'''
+    cmp_os_source = CompareOpenStackReleases(os_release('neutron-common'))
+    if cmp_os_source >= 'rocky':
+        return PURGE_PACKAGES
+    return []
 
 
 def determine_l3ha_packages():
@@ -706,11 +736,17 @@ def do_openstack_upgrade(configs):
     apt_update(fatal=True)
     apt_upgrade(options=dpkg_opts,
                 fatal=True, dist=True)
+
     # The cached version of os_release will now be invalid as the pkg version
     # should have changed during the upgrade.
     reset_os_release()
     apt_install(get_early_packages(), fatal=True)
     apt_install(get_packages(), fatal=True)
+
+    installed_packages = filter_missing_packages(get_purge_packages())
+    if installed_packages:
+        apt_purge(installed_packages, fatal=True)
+        apt_autoremove(purge=True, fatal=True)
 
 
 def configure_ovs():
