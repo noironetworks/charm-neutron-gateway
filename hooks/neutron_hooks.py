@@ -34,6 +34,8 @@ from charmhelpers.contrib.openstack.utils import (
     openstack_upgrade_available,
     pausable_restart_on_change as restart_on_change,
     is_unit_paused_set,
+    series_upgrade_prepare,
+    series_upgrade_complete,
 )
 from charmhelpers.payload.execd import execd_preinstall
 from charmhelpers.core.sysctl import create as create_sysctl
@@ -65,6 +67,8 @@ from neutron_utils import (
     install_systemd_override,
     configure_apparmor,
     write_vendordata,
+    pause_unit_helper,
+    resume_unit_helper,
 )
 
 hooks = Hooks()
@@ -321,6 +325,20 @@ def ha_relation_destroyed():
 @harden()
 def update_status():
     log('Updating status.')
+
+
+@hooks.hook('pre-series-upgrade')
+def pre_series_upgrade():
+    log("Running prepare series upgrade hook", "INFO")
+    series_upgrade_prepare(
+        pause_unit_helper, CONFIGS)
+
+
+@hooks.hook('post-series-upgrade')
+def post_series_upgrade():
+    log("Running complete series upgrade hook", "INFO")
+    series_upgrade_complete(
+        resume_unit_helper, CONFIGS)
 
 
 if __name__ == '__main__':
