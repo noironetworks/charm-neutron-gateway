@@ -63,7 +63,6 @@ class TestL3AgentContext(CharmTestCase):
             DummyNeutronAPIContext(return_value={'enable_dvr': False,
                                                  'report_interval': 30,
                                                  'rpc_response_timeout': 60,
-                                                 'enable_l3ha': True,
                                                  })
         self.test_config.set('run-internal-router', 'none')
         self.test_config.set('external-network-id', '')
@@ -72,7 +71,6 @@ class TestL3AgentContext(CharmTestCase):
                          {'agent_mode': 'legacy',
                           'report_interval': 30,
                           'rpc_response_timeout': 60,
-                          'use_l3ha': True,
                           'external_configuration_new': True,
                           'handle_internal_only_router': False,
                           'plugin': 'ovs'})
@@ -83,7 +81,6 @@ class TestL3AgentContext(CharmTestCase):
             DummyNeutronAPIContext(return_value={'enable_dvr': False,
                                                  'report_interval': 30,
                                                  'rpc_response_timeout': 60,
-                                                 'enable_l3ha': True,
                                                  })
         self.test_config.set('run-internal-router', 'none')
         self.test_config.set('ext-port', 'eth1')
@@ -92,7 +89,6 @@ class TestL3AgentContext(CharmTestCase):
                          {'agent_mode': 'legacy',
                           'report_interval': 30,
                           'rpc_response_timeout': 60,
-                          'use_l3ha': True,
                           'handle_internal_only_router': False,
                           'plugin': 'ovs'})
 
@@ -102,7 +98,6 @@ class TestL3AgentContext(CharmTestCase):
             DummyNeutronAPIContext(return_value={'enable_dvr': False,
                                                  'report_interval': 30,
                                                  'rpc_response_timeout': 60,
-                                                 'enable_l3ha': True,
                                                  })
         self.test_config.set('run-internal-router', 'leader')
         self.test_config.set('external-network-id', 'netid')
@@ -111,7 +106,6 @@ class TestL3AgentContext(CharmTestCase):
                          {'agent_mode': 'legacy',
                           'report_interval': 30,
                           'rpc_response_timeout': 60,
-                          'use_l3ha': True,
                           'handle_internal_only_router': True,
                           'ext_net_id': 'netid',
                           'plugin': 'ovs'})
@@ -122,7 +116,6 @@ class TestL3AgentContext(CharmTestCase):
             DummyNeutronAPIContext(return_value={'enable_dvr': False,
                                                  'report_interval': 30,
                                                  'rpc_response_timeout': 60,
-                                                 'enable_l3ha': True,
                                                  })
         self.test_config.set('run-internal-router', 'all')
         self.test_config.set('external-network-id', 'netid')
@@ -131,7 +124,6 @@ class TestL3AgentContext(CharmTestCase):
                          {'agent_mode': 'legacy',
                           'report_interval': 30,
                           'rpc_response_timeout': 60,
-                          'use_l3ha': True,
                           'handle_internal_only_router': True,
                           'ext_net_id': 'netid',
                           'plugin': 'ovs'})
@@ -142,7 +134,6 @@ class TestL3AgentContext(CharmTestCase):
             DummyNeutronAPIContext(return_value={'enable_dvr': True,
                                                  'report_interval': 30,
                                                  'rpc_response_timeout': 60,
-                                                 'enable_l3ha': True,
                                                  })
         self.assertEqual(neutron_contexts.L3AgentContext()()['agent_mode'],
                          'dvr_snat')

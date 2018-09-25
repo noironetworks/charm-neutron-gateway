@@ -77,7 +77,6 @@ class L3AgentContext(OSContextGenerator):
             ctxt['agent_mode'] = 'legacy'
         ctxt['rpc_response_timeout'] = api_settings['rpc_response_timeout']
         ctxt['report_interval'] = api_settings['report_interval']
-        ctxt['use_l3ha'] = api_settings['enable_l3ha']
         return ctxt
 
 
