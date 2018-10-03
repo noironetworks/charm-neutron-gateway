@@ -174,7 +174,8 @@ class TestNeutronUtils(CharmTestCase):
             'python-oslo.config',
             'python-nova',
             'python-neutron',
-            'python-neutron-fwaas'],
+            'python-neutron-fwaas',
+            'python-neutron-lbaas'],
             neutron_utils.get_purge_packages()
         )
 

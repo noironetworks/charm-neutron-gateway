@@ -186,12 +186,14 @@ PURGE_PACKAGES = [
     'python-nova',
     'python-neutron',
     'python-neutron-fwaas',
+    'python-neutron-lbaas',
 ]
 
 PY3_PACKAGES = [
     'python3-nova',
     'python3-neutron',
     'python3-neutron-fwaas',
+    'python3-neutron-lbaas',
 ]
 
 EARLY_PACKAGES = {
