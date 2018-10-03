@@ -87,6 +87,7 @@ from copy import deepcopy
 def valid_plugin():
     return config('plugin') in CORE_PLUGIN
 
+
 NEUTRON_COMMON = 'neutron-common'
 VERSION_PACKAGE = NEUTRON_COMMON
 
@@ -300,6 +301,7 @@ def determine_l3ha_packages():
 
 def use_l3ha():
     return NeutronAPIContext()()['enable_l3ha']
+
 
 EXT_PORT_CONF = '/etc/init/ext-port.conf'
 PHY_NIC_MTU_CONF = '/etc/init/os-charm-phy-nic-mtu.conf'
@@ -1050,6 +1052,7 @@ def configure_apparmor():
     for profile in profiles:
         context.AppArmorContext(profile).setup_aa_profile()
 
+
 VENDORDATA_FILE = '/etc/nova/vendor_data.json'
 
 
@@ -1062,3 +1065,10 @@ def write_vendordata(vdata):
     with open(VENDORDATA_FILE, 'w') as vdata_file:
         vdata_file.write(json.dumps(json_vdata, sort_keys=True, indent=2))
     return True
+
+
+def get_availability_zone():
+    use_juju_az = config('customize-failure-domain')
+    juju_az = os.environ.get('JUJU_AVAILABILITY_ZONE')
+    return (juju_az if use_juju_az and juju_az
+            else config('default-availability-zone'))

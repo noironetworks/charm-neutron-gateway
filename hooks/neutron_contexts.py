@@ -19,9 +19,10 @@ from charmhelpers.contrib.openstack.utils import (
     os_release,
     CompareOpenStackReleases,
 )
-from charmhelpers.contrib.hahelpers.cluster import(
+from charmhelpers.contrib.hahelpers.cluster import (
     eligible_leader
 )
+
 from charmhelpers.contrib.network.ip import (
     get_address_in_network,
     get_host_ip,
@@ -46,6 +47,11 @@ CORE_PLUGIN = {
     NSX: NEUTRON_NSX_PLUGIN,
     OVS_ODL: NEUTRON_OVS_ODL_PLUGIN,
 }
+
+
+def _get_availability_zone():
+    from neutron_utils import get_availability_zone as get_az
+    return get_az()
 
 
 def core_plugin():
@@ -122,6 +128,7 @@ class NeutronGatewayContext(NeutronAPIContext):
             'report_interval': api_settings['report_interval'],
             'enable_metadata_network': config('enable-metadata-network'),
             'enable_isolated_metadata': config('enable-isolated-metadata'),
+            'availability_zone': _get_availability_zone(),
         }
 
         ctxt['local_ip'] = get_local_ip()
@@ -196,6 +203,7 @@ class NovaMetadataContext(OSContextGenerator):
             ctxt['nova_metadata_port'] = '8775'
             ctxt['nova_metadata_protocol'] = 'http'
         return ctxt
+
 
 SHARED_SECRET = "/etc/{}/secret.txt"
 

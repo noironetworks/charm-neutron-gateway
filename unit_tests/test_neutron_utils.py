@@ -865,6 +865,62 @@ class TestNeutronUtils(CharmTestCase):
         with patch_open() as (_open, _file):
             self.assertEqual(neutron_utils.write_vendordata(_jdata), False)
 
+    @patch.object(neutron_utils.os.environ, 'get')
+    def test_get_az_customize_with_env(self, os_environ_get_mock):
+        self.config.side_effect = self.test_config.get
+        self.test_config.set('customize-failure-domain', True)
+        self.test_config.set('default-availability-zone', 'nova')
+
+        def os_environ_get_side_effect(key):
+            return {
+                'JUJU_AVAILABILITY_ZONE': 'az1',
+            }[key]
+        os_environ_get_mock.side_effect = os_environ_get_side_effect
+        az = neutron_utils.get_availability_zone()
+        self.assertEqual('az1', az)
+
+    @patch.object(neutron_utils.os.environ, 'get')
+    def test_get_az_customize_without_env(self, os_environ_get_mock):
+        self.config.side_effect = self.test_config.get
+        self.test_config.set('customize-failure-domain', True)
+        self.test_config.set('default-availability-zone', 'mynova')
+
+        def os_environ_get_side_effect(key):
+            return {
+                'JUJU_AVAILABILITY_ZONE': '',
+            }[key]
+        os_environ_get_mock.side_effect = os_environ_get_side_effect
+        az = neutron_utils.get_availability_zone()
+        self.assertEqual('mynova', az)
+
+    @patch.object(neutron_utils.os.environ, 'get')
+    def test_get_az_no_customize_without_env(self, os_environ_get_mock):
+        self.config.side_effect = self.test_config.get
+        self.test_config.set('customize-failure-domain', False)
+        self.test_config.set('default-availability-zone', 'nova')
+
+        def os_environ_get_side_effect(key):
+            return {
+                'JUJU_AVAILABILITY_ZONE': '',
+            }[key]
+        os_environ_get_mock.side_effect = os_environ_get_side_effect
+        az = neutron_utils.get_availability_zone()
+        self.assertEqual('nova', az)
+
+    @patch.object(neutron_utils.os.environ, 'get')
+    def test_get_az_no_customize_with_env(self, os_environ_get_mock):
+        self.config.side_effect = self.test_config.get
+        self.test_config.set('customize-failure-domain', False)
+        self.test_config.set('default-availability-zone', 'nova')
+
+        def os_environ_get_side_effect(key):
+            return {
+                'JUJU_AVAILABILITY_ZONE': 'az1',
+            }[key]
+        os_environ_get_mock.side_effect = os_environ_get_side_effect
+        az = neutron_utils.get_availability_zone()
+        self.assertEqual('nova', az)
+
 network_context = {
     'service_username': 'foo',
     'service_password': 'bar',
@@ -892,6 +948,7 @@ class DummyExternalPortContext():
 
     def __call__(self):
         return self.return_value
+
 
 cluster1 = ['cluster1-machine1.internal']
 cluster2 = ['cluster2-machine1.internal', 'cluster2-machine2.internal'

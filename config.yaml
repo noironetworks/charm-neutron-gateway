@@ -271,3 +271,31 @@ options:
       Only supported in OpenStack Newton and higher. For deployments of Queens or
       later this value is ignored. Please set the corresponding value in the
       nova-cloud-controller charm.
+  default-availability-zone:
+    type: string
+    default: 'nova'
+    description: |
+      Default availability zone to use for agents (l3, dhcp) on this machine.
+      If this option is not set, the default availability zone 'nova' is used.
+      If customize-failure-domain is set to True, it will override this option
+      only if an AZ is set by the Juju provider. If JUJU_AVAILABILITY_ZONE is
+      not set, the value specified by this option will be used regardless of
+      customize-failure-domain's setting.
+
+      .
+      NOTE: Router and Network objects have a property called
+      availability_zone_hints which can be used to restrict dnsmasq
+      and router namespace placement by DHCP and L3 agents to specific
+      neutron availability zones. Neutron AZs are not tied to Nova AZs but
+      their names can match.
+      .
+  customize-failure-domain:
+    type: boolean
+    default: False
+    description: |
+      Juju propagates availability zone information to charms from the
+      underlying machine provider such as MAAS and this option allows the
+      charm to use JUJU_AVAILABILITY_ZONE to set default_availability_zone
+      for Neutron agents (DHCP and L3 agents). This option overrides the
+      default-availability-zone charm config setting only when the Juju
+      provider sets JUJU_AVAILABILITY_ZONE.
