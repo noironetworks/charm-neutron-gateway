@@ -4,6 +4,9 @@ import uuid
 from charmhelpers.core.hookenv import (
     log, ERROR,
     config,
+    relation_get,
+    relation_ids,
+    related_units,
     unit_get,
     network_get_primary_address,
 )
@@ -16,7 +19,7 @@ from charmhelpers.contrib.openstack.utils import (
     os_release,
     CompareOpenStackReleases,
 )
-from charmhelpers.contrib.hahelpers.cluster import (
+from charmhelpers.contrib.hahelpers.cluster import(
     eligible_leader
 )
 from charmhelpers.contrib.network.ip import (
@@ -47,6 +50,22 @@ CORE_PLUGIN = {
 
 def core_plugin():
     return CORE_PLUGIN[config('plugin')]
+
+
+def get_local_ip():
+    fallback = get_host_ip(unit_get('private-address'))
+    if config('os-data-network'):
+        # NOTE: prefer any existing use of config based networking
+        local_ip = get_address_in_network(
+            config('os-data-network'),
+            fallback)
+    else:
+        # NOTE: test out network-spaces support, then fallback
+        try:
+            local_ip = get_host_ip(network_get_primary_address('data'))
+        except NotImplementedError:
+            local_ip = fallback
+    return local_ip
 
 
 class L3AgentContext(OSContextGenerator):
@@ -105,21 +124,7 @@ class NeutronGatewayContext(NeutronAPIContext):
             'enable_isolated_metadata': config('enable-isolated-metadata'),
         }
 
-        fallback = get_host_ip(unit_get('private-address'))
-        if config('os-data-network'):
-            # NOTE: prefer any existing use of config based networking
-            ctxt['local_ip'] = \
-                get_address_in_network(config('os-data-network'),
-                                       fallback)
-        else:
-            # NOTE: test out network-spaces support, then fallback
-            try:
-                ctxt['local_ip'] = get_host_ip(
-                    network_get_primary_address('data')
-                )
-            except NotImplementedError:
-                ctxt['local_ip'] = fallback
-
+        ctxt['local_ip'] = get_local_ip()
         mappings = config('bridge-mappings')
         if mappings:
             ctxt['bridge_mappings'] = ','.join(mappings.split())
@@ -152,27 +157,45 @@ class NeutronGatewayContext(NeutronAPIContext):
 
 class NovaMetadataContext(OSContextGenerator):
 
+    def __init__(self, rel_name='quantum-network-service'):
+        self.rel_name = rel_name
+        self.interfaces = [rel_name]
+
     def __call__(self):
         ctxt = {}
-        ctxt['vendordata_providers'] = []
-        vdata = config('vendor-data')
-        vdata_url = config('vendor-data-url')
         cmp_os_release = CompareOpenStackReleases(os_release('neutron-common'))
+        if cmp_os_release < 'rocky':
+            ctxt['vendordata_providers'] = []
+            vdata = config('vendor-data')
+            vdata_url = config('vendor-data-url')
 
-        if vdata:
-            ctxt['vendor_data'] = True
-            ctxt['vendordata_providers'].append('StaticJSON')
+            if vdata:
+                ctxt['vendor_data'] = True
+                ctxt['vendordata_providers'].append('StaticJSON')
 
-        if vdata_url:
-            if cmp_os_release > 'mitaka':
-                ctxt['vendor_data_url'] = vdata_url
-                ctxt['vendordata_providers'].append('DynamicJSON')
-            else:
-                log('Dynamic vendor data unsupported'
-                    ' for {}.'.format(cmp_os_release), level=ERROR)
-
+            if vdata_url:
+                if cmp_os_release > 'mitaka':
+                    ctxt['vendor_data_url'] = vdata_url
+                    ctxt['vendordata_providers'].append('DynamicJSON')
+                else:
+                    log('Dynamic vendor data unsupported'
+                        ' for {}.'.format(cmp_os_release), level=ERROR)
+        for rid in relation_ids(self.rel_name):
+            for unit in related_units(rid):
+                rdata = relation_get(rid=rid, unit=unit)
+                secret = rdata.get('shared-metadata-secret')
+                if secret:
+                    ctxt['shared_secret'] = secret
+                    ctxt['nova_metadata_host'] = rdata['nova-metadata-host']
+                    ctxt['nova_metadata_port'] = rdata['nova-metadata-port']
+                    ctxt['nova_metadata_protocol'] = rdata[
+                        'nova-metadata-protocol']
+        if not ctxt.get('shared_secret'):
+            ctxt['shared_secret'] = get_shared_secret()
+            ctxt['nova_metadata_host'] = get_local_ip()
+            ctxt['nova_metadata_port'] = '8775'
+            ctxt['nova_metadata_protocol'] = 'http'
         return ctxt
-
 
 SHARED_SECRET = "/etc/{}/secret.txt"
 

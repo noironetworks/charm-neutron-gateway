@@ -736,14 +736,27 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
         """Verify the data in the metadata agent config file."""
         u.log.debug('Checking neutron gateway metadata agent '
                     'config file data...')
+        cmp_os_release = CompareOpenStackReleases(
+            self._get_openstack_release_string()
+        )
         unit = self.neutron_gateway_sentry
+        if cmp_os_release >= 'rocky':
+            nova_metadata_ip_key = 'nova_metadata_host'
+            nova_metadata_ip_value = self.get_private_address(
+                self.nova_cc_sentry)
+        elif cmp_os_release >= 'queens':
+            nova_metadata_ip_key = 'nova_metadata_host'
+            nova_metadata_ip_value = self.get_private_address(unit)
+        else:
+            nova_metadata_ip_key = 'nova_metadata_ip'
+            nova_metadata_ip_value = self.get_private_address(unit)
 
         conf = '/etc/neutron/metadata_agent.ini'
         expected = {
             'root_helper': 'sudo neutron-rootwrap '
                            '/etc/neutron/rootwrap.conf',
             'state_path': '/var/lib/neutron',
-            'nova_metadata_ip': self.get_private_address(unit),
+            nova_metadata_ip_key: nova_metadata_ip_value,
             'nova_metadata_port': '8775',
             'cache_url': 'memory://?default_ttl=5'
         }
@@ -782,6 +795,10 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
     def test_308_neutron_nova_config(self):
         """Verify the data in the nova config file."""
         u.log.debug('Checking neutron gateway nova config file data...')
+        if self._get_openstack_release() >= self.bionic_rocky:
+            u.log.info("Skipping test, gateway has no nova config after "
+                       "Queens")
+            return
         unit = self.neutron_gateway_sentry
         conf = '/etc/nova/nova.conf'
 

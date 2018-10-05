@@ -60,6 +60,7 @@ class TestNeutronUtils(CharmTestCase):
         self.maxDiff = None
 
     def tearDown(self):
+        super(TestNeutronUtils, self).tearDown()
         # Reset cached cache
         hookenv.cache = {}
 
@@ -96,12 +97,16 @@ class TestNeutronUtils(CharmTestCase):
                          [])
 
     def test_get_packages_ovs_icehouse(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs'
         self.os_release.return_value = 'icehouse'
         self.assertTrue('neutron-vpn-agent' in neutron_utils.get_packages())
         self.assertFalse('neutron-l3-agent' in neutron_utils.get_packages())
 
     def test_get_packages_ovs_juno_utopic(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs'
         self.os_release.return_value = 'juno'
         self._set_distrib_codename('utopic')
@@ -109,17 +114,23 @@ class TestNeutronUtils(CharmTestCase):
         self.assertTrue('neutron-l3-agent' in neutron_utils.get_packages())
 
     def test_get_packages_ovs_juno_trusty(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs'
         self.os_release.return_value = 'juno'
         self.assertTrue('neutron-vpn-agent' in neutron_utils.get_packages())
         self.assertFalse('neutron-l3-agent' in neutron_utils.get_packages())
 
     def test_get_packages_ovs_kilo(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs'
         self.os_release.return_value = 'kilo'
         self.assertTrue('python-neutron-fwaas' in neutron_utils.get_packages())
 
     def test_get_packages_ovs_liberty(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs'
         self.os_release.return_value = 'liberty'
         packages = neutron_utils.get_packages()
@@ -129,6 +140,8 @@ class TestNeutronUtils(CharmTestCase):
         self.assertTrue('python-pymysql' in packages)
 
     def test_get_packages_ovs_mitaka(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs'
         self.os_release.return_value = 'mitaka'
         packages = neutron_utils.get_packages()
@@ -140,6 +153,8 @@ class TestNeutronUtils(CharmTestCase):
         self.assertTrue('python-pymysql' in packages)
 
     def test_get_packages_ovs_newton(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs'
         self.os_release.return_value = 'newton'
         packages = neutron_utils.get_packages()
@@ -152,6 +167,8 @@ class TestNeutronUtils(CharmTestCase):
         self.assertTrue('python-pymysql' in packages)
 
     def test_get_packages_ovs_rocky(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=True)
         self.config.return_value = 'ovs'
         self.os_release.return_value = 'rocky'
         packages = neutron_utils.get_packages()
@@ -180,6 +197,8 @@ class TestNeutronUtils(CharmTestCase):
         )
 
     def test_get_packages_ovsodl_icehouse(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs-odl'
         self.os_release.return_value = 'icehouse'
         packages = neutron_utils.get_packages()
@@ -190,6 +209,8 @@ class TestNeutronUtils(CharmTestCase):
         self.assertTrue('neutron-lbaas-agent' in packages)
 
     def test_get_packages_ovsodl_newton(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs-odl'
         self.os_release.return_value = 'newton'
         packages = neutron_utils.get_packages()
@@ -201,6 +222,8 @@ class TestNeutronUtils(CharmTestCase):
         self.assertTrue('neutron-lbaasv2-agent' in packages)
 
     def test_get_packages_l3ha(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs'
         self.get_os_codename_install_source.return_value = 'juno'
         self.os_release.return_value = 'juno'
@@ -320,6 +343,8 @@ class TestNeutronUtils(CharmTestCase):
     @patch('charmhelpers.contrib.openstack.templating.OSConfigRenderer')
     def test_do_openstack_upgrade(self, mock_renderer,
                                   mock_register_configs):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         mock_configs = MagicMock()
         mock_register_configs.return_value = mock_configs
         self.config.side_effect = self.test_config.get
@@ -350,6 +375,8 @@ class TestNeutronUtils(CharmTestCase):
     @patch('charmhelpers.contrib.openstack.templating.OSConfigRenderer')
     def test_do_openstack_upgrade_rocky(self, mock_renderer,
                                         mock_register_configs):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=True)
         mock_configs = MagicMock()
         mock_register_configs.return_value = mock_configs
         self.config.side_effect = self.test_config.get
@@ -382,6 +409,8 @@ class TestNeutronUtils(CharmTestCase):
 
     @patch('charmhelpers.contrib.openstack.templating.OSConfigRenderer')
     def test_register_configs_ovs(self, mock_renderer):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs'
         self.os_release.return_value = 'diablo'
         self.is_relation_made.return_value = False
@@ -398,6 +427,8 @@ class TestNeutronUtils(CharmTestCase):
 
     @patch('charmhelpers.contrib.openstack.templating.OSConfigRenderer')
     def test_register_configs_ovs_odl(self, mock_renderer):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.side_effect = self.test_config.get
         self.test_config.set('plugin', 'ovs-odl')
         self.is_relation_made.return_value = False
@@ -415,6 +446,8 @@ class TestNeutronUtils(CharmTestCase):
 
     @patch('charmhelpers.contrib.openstack.templating.OSConfigRenderer')
     def test_register_configs_amqp_nova(self, mock_renderer):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs'
         self.is_relation_made.return_value = True
         self.os_release.return_value = 'diablo'
@@ -431,6 +464,8 @@ class TestNeutronUtils(CharmTestCase):
 
     @patch.object(neutron_utils, 'get_packages')
     def test_restart_map_ovs(self, mock_get_packages):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs'
         self.get_os_codename_install_source.return_value = 'havana'
         mock_get_packages.return_value = ['neutron-vpn-agent']
@@ -476,6 +511,8 @@ class TestNeutronUtils(CharmTestCase):
 
     @patch.object(neutron_utils, 'get_packages')
     def test_restart_map_ovs_mitaka(self, mock_get_packages):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs'
         mock_get_packages.return_value = ['neutron-vpn-agent']
         self.os_release.return_value = 'mitaka'
@@ -519,6 +556,8 @@ class TestNeutronUtils(CharmTestCase):
 
     @patch.object(neutron_utils, 'get_packages')
     def test_restart_map_ovs_newton(self, mock_get_packages):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs'
         mock_get_packages.return_value = ['neutron-vpn-agent']
         self.os_release.return_value = 'newton'
@@ -562,6 +601,8 @@ class TestNeutronUtils(CharmTestCase):
 
     @patch.object(neutron_utils, 'get_packages')
     def test_restart_map_ovs_post_trusty(self, mock_get_packages):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs'
         # No VPN agent after trusty
         mock_get_packages.return_value = ['neutron-l3-agent']
@@ -572,6 +613,8 @@ class TestNeutronUtils(CharmTestCase):
 
     @patch.object(neutron_utils, 'get_packages')
     def test_restart_map_ovs_odl(self, mock_get_packages):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs-odl'
         mock_get_packages.return_value = ['neutron-vpn-agent']
         self.os_release.return_value = 'icehouse'
@@ -610,6 +653,8 @@ class TestNeutronUtils(CharmTestCase):
 
     @patch.object(neutron_utils, 'get_packages')
     def test_restart_map_ovs_odl_newton(self, mock_get_packages):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs-odl'
         mock_get_packages.return_value = ['neutron-vpn-agent']
         self.os_release.return_value = 'newton'
@@ -648,6 +693,8 @@ class TestNeutronUtils(CharmTestCase):
 
     @patch('charmhelpers.contrib.openstack.templating.OSConfigRenderer')
     def test_register_configs_nsx(self, mock_renderer):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'nsx'
         self.os_release.return_value = 'diablo'
         configs = neutron_utils.register_configs()
@@ -659,6 +706,8 @@ class TestNeutronUtils(CharmTestCase):
             configs.register.assert_any_call(conf, ANY)
 
     def test_stop_services_ovs(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs'
         self.os_release.return_value = 'diablo'
         neutron_utils.stop_services()
@@ -674,6 +723,8 @@ class TestNeutronUtils(CharmTestCase):
 
     @patch('charmhelpers.contrib.openstack.templating.OSConfigRenderer')
     def test_register_configs_pre_install(self, mock_renderer):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self.config.return_value = 'ovs'
         self.is_relation_made.return_value = False
         self.os_release.return_value = 'diablo'
@@ -721,6 +772,8 @@ class TestNeutronUtils(CharmTestCase):
         self.assertTrue(self.log.called)
 
     def test_resolve_config_files_ovs_liberty(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self._set_distrib_codename('trusty')
         self.os_release.return_value = 'liberty'
         self.is_relation_made = False
@@ -736,6 +789,8 @@ class TestNeutronUtils(CharmTestCase):
             self.assertTrue(config not in actual_configs)
 
     def test_resolve_config_files_ovs_mitaka(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self._set_distrib_codename('trusty')
         self.os_release.return_value = 'mitaka'
         self.is_relation_made = False
@@ -751,6 +806,8 @@ class TestNeutronUtils(CharmTestCase):
             self.assertTrue(config not in actual_configs)
 
     def test_resolve_config_files_ovs_trusty(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self._set_distrib_codename('trusty')
         self.os_release.return_value = 'mitaka'
         self.is_relation_made = False
@@ -764,6 +821,8 @@ class TestNeutronUtils(CharmTestCase):
             self.assertTrue(config in actual_configs)
 
     def test_resolve_config_files_ovs_xenial(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self._set_distrib_codename('xenial')
         self.os_release.return_value = 'mitaka'
         self.is_relation_made = False
@@ -777,6 +836,8 @@ class TestNeutronUtils(CharmTestCase):
             self.assertTrue(config not in actual_configs)
 
     def test_resolve_config_files_ovs_newton(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
         self._set_distrib_codename('xenial')
         self.os_release.return_value = 'newton'
         self.is_relation_made = False
@@ -803,7 +864,6 @@ class TestNeutronUtils(CharmTestCase):
         _json_loads.side_effect = TypeError
         with patch_open() as (_open, _file):
             self.assertEqual(neutron_utils.write_vendordata(_jdata), False)
-
 
 network_context = {
     'service_username': 'foo',

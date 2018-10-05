@@ -53,6 +53,8 @@ class CharmTestCase(unittest.TestCase):
         self.test_config = TestConfig()
         self.test_relation = TestRelation()
         self.patch_all()
+        self._patches = {}
+        self._patches_start = {}
 
     def patch(self, method):
         _m = patch.object(self.obj, method)
@@ -63,6 +65,33 @@ class CharmTestCase(unittest.TestCase):
     def patch_all(self):
         for method in self.patches:
             setattr(self, method, self.patch(method))
+
+    def tearDown(self):
+        for k, v in self._patches.items():
+            v.stop()
+            setattr(self, k, None)
+        self._patches = None
+        self._patches_start = None
+
+    def patch_object(self, obj, attr, name=None, **kwargs):
+        """Patch a patchable thing.  Uses mock.patch.object() to do the work.
+        Automatically unpatches at the end of the test.
+
+        The mock gets added to the test object (self) using 'name' or the attr
+        passed in the arguments.
+
+        :param obj: an object that needs to have an attribute patched.
+        :param attr: <string> that represents the attribute being patched.
+        :param name: optional <string> name to call the mock.
+        :param **kwargs: any other args to pass to mock.patch()
+        """
+        mocked = patch.object(obj, attr, **kwargs)
+        if name is None:
+            name = attr
+        started = mocked.start()
+        self._patches[name] = mocked
+        self._patches_start[name] = started
+        setattr(self, name, started)
 
 
 class TestConfig(object):
