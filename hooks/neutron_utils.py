@@ -303,7 +303,7 @@ NEUTRON_VPNAAS_AGENT_CONF = "/etc/neutron/vpn_agent.ini"
 NEUTRON_FWAAS_CONF = "/etc/neutron/fwaas_driver.ini"
 
 OPFLEX_CONFIG = "/etc/opflex-agent-ovs/conf.d/opflex-agent-ovs.conf"
-OPFLEX_SERVICES = ['agent-ovs', 'neutron-opflex-agent']
+OPFLEX_SERVICES = ['opflex-agent', 'neutron-opflex-agent']
 
 NOVA_CONF_DIR = '/etc/nova'
 NOVA_CONF = "/etc/nova/nova.conf"
@@ -531,11 +531,11 @@ NEUTRON_ACI_CONFIG_FILES = {
         'hook_contexts': [aci_opflex_context.AciOpflexConfigContext(),],
     },
     NEUTRON_CONF: {
+        'services': [ 'neutron-dhcp-agent', 'neutron-opflex-agent'],
         'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
                           NeutronGatewayContext(),
                           context.WorkerConfigContext(),
                           SyslogContext()],
-        'services': [ 'neutron-dhcp-agent', 'agent-ovs', 'neutron-opflex-agent']
     },
     NEUTRON_OVS_AGENT_CONF: {
         'services': OPFLEX_SERVICES,
