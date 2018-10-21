@@ -531,7 +531,7 @@ NEUTRON_ACI_CONFIG_FILES = {
         'hook_contexts': [aci_opflex_context.AciOpflexConfigContext(),],
     },
     NEUTRON_CONF: {
-        'services': [ 'neutron-dhcp-agent', 'neutron-opflex-agent'],
+        'services': [ 'neutron-dhcp-agent', 'opflex-agent', 'neutron-opflex-agent'],
         'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
                           NeutronGatewayContext(),
                           context.WorkerConfigContext(),
