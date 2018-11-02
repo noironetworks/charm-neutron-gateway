@@ -99,7 +99,7 @@ def install():
             opt.append('--allow-unauthenticated')
 
         fetch.apt_update(fatal=True)
-        fetch.apt_upgrade(fatal=True)
+        fetch.apt_upgrade(fatal=True, options=opt)
         fetch.apt_install(['neutron-common', 'neutron-server', 'python-apicapi'], options=opt, fatal=True)
         fetch.apt_install(['openvswitch-switch', 'agent-ovs', 'neutron-opflex-agent'], options=opt, fatal=True)
         #fetch.apt_install(['neutron-ml2-driver-apic'], options=opt, fatal=True)
