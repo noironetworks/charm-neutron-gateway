@@ -758,6 +758,11 @@ def do_openstack_upgrade(configs):
     if installed_packages:
         apt_purge(installed_packages, fatal=True)
         apt_autoremove(purge=True, fatal=True)
+    # Bug #1802365 neutron-metadata-agent needs restarting after upgrade to
+    # rocky.
+    if CompareOpenStackReleases(os_release('neutron-common')) == 'rocky':
+        log('Restart neutron-metadata-agent for upgrade to rocky', level=DEBUG)
+        service_restart('neutron-metadata-agent')
 
 
 def configure_ovs():

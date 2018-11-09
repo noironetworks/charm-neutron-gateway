@@ -406,6 +406,7 @@ class TestNeutronUtils(CharmTestCase):
         self.configure_installation_source.assert_called_with(
             'cloud:bionic-rocky'
         )
+        self.service_restart.assert_called_once_with('neutron-metadata-agent')
 
     @patch('charmhelpers.contrib.openstack.templating.OSConfigRenderer')
     def test_register_configs_ovs(self, mock_renderer):
