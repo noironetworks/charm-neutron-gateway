@@ -61,6 +61,8 @@ TO_PATCH = [
     'configure_apparmor',
     'disable_nova_metadata',
     'remove_legacy_nova_metadata',
+    'services',
+    'remove_old_packages',
 ]
 
 
@@ -160,12 +162,25 @@ class TestQuantumHooks(CharmTestCase):
         _exit.assert_called_with(1)
 
     def test_upgrade_charm(self):
+        self.remove_old_packages.return_value = False
         _install = self.patch('install')
         _config_changed = self.patch('config_changed')
         self._call_hook('upgrade-charm')
         self.assertTrue(_install.called)
         self.assertTrue(_config_changed.called)
         self.assertTrue(self.install_systemd_override.called)
+
+    def test_upgrade_charm_purge(self):
+        self.is_unit_paused_set.return_value = False
+        self.remove_old_packages.return_value = True
+        self.services.return_value = ['neutron-metadata-agent']
+        _install = self.patch('install')
+        _config_changed = self.patch('config_changed')
+        self._call_hook('upgrade-charm')
+        self.assertTrue(_install.called)
+        self.assertTrue(_config_changed.called)
+        self.assertTrue(self.install_systemd_override.called)
+        self.service_restart.assert_called_once_with('neutron-metadata-agent')
 
     def test_amqp_joined(self):
         self._call_hook('amqp-relation-joined')

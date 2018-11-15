@@ -293,6 +293,18 @@ def get_purge_packages():
     return []
 
 
+def remove_old_packages():
+    '''Purge any packages that need ot be removed.
+
+    :returns: bool Whether packages were removed.
+    '''
+    installed_packages = filter_missing_packages(get_purge_packages())
+    if installed_packages:
+        apt_purge(installed_packages, fatal=True)
+        apt_autoremove(purge=True, fatal=True)
+    return bool(installed_packages)
+
+
 def determine_l3ha_packages():
     if use_l3ha():
         return L3HA_PACKAGES
@@ -754,10 +766,8 @@ def do_openstack_upgrade(configs):
     apt_install(get_early_packages(), fatal=True)
     apt_install(get_packages(), fatal=True)
 
-    installed_packages = filter_missing_packages(get_purge_packages())
-    if installed_packages:
-        apt_purge(installed_packages, fatal=True)
-        apt_autoremove(purge=True, fatal=True)
+    remove_old_packages()
+
     # Bug #1802365 neutron-metadata-agent needs restarting after upgrade to
     # rocky.
     if CompareOpenStackReleases(os_release('neutron-common')) == 'rocky':

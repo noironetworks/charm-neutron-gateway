@@ -71,6 +71,7 @@ from neutron_utils import (
     resume_unit_helper,
     remove_legacy_nova_metadata,
     disable_nova_metadata,
+    remove_old_packages,
 )
 
 hooks = Hooks()
@@ -160,6 +161,11 @@ def config_changed():
 @harden()
 def upgrade_charm():
     install()
+    packages_removed = remove_old_packages()
+    if packages_removed and not is_unit_paused_set():
+        log("Package purge detected, restarting services", "INFO")
+        for s in services():
+            service_restart(s)
     config_changed()
     update_legacy_ha_files(force=True)
 
