@@ -257,7 +257,7 @@ options:
     description: |
       A JSON-formatted string that will serve as vendor metadata
       (via "StaticJSON" provider) to all VM's within an OpenStack deployment,
-      regardless of project or domain. For deployments of Queens or later
+      regardless of project or domain. For deployments of Rocky or later
       this value is ignored. Please set the corresponding value in the
       nova-cloud-controller charm.
   vendor-data-url:
@@ -268,7 +268,7 @@ options:
       (via "DynamicJSON" provider) to all VM's within an OpenStack deployment,
       regardless of project or domain.
       .
-      Only supported in OpenStack Newton and higher. For deployments of Queens or
+      Only supported in OpenStack Newton and higher. For deployments of Rocky or
       later this value is ignored. Please set the corresponding value in the
       nova-cloud-controller charm.
   default-availability-zone:

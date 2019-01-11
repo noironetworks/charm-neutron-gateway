@@ -172,21 +172,22 @@ class NovaMetadataContext(OSContextGenerator):
         ctxt = {}
         cmp_os_release = CompareOpenStackReleases(os_release('neutron-common'))
         if cmp_os_release < 'rocky':
-            ctxt['vendordata_providers'] = []
+            vdata_providers = []
             vdata = config('vendor-data')
             vdata_url = config('vendor-data-url')
 
             if vdata:
                 ctxt['vendor_data'] = True
-                ctxt['vendordata_providers'].append('StaticJSON')
+                vdata_providers.append('StaticJSON')
 
             if vdata_url:
                 if cmp_os_release > 'mitaka':
                     ctxt['vendor_data_url'] = vdata_url
-                    ctxt['vendordata_providers'].append('DynamicJSON')
+                    vdata_providers.append('DynamicJSON')
                 else:
                     log('Dynamic vendor data unsupported'
                         ' for {}.'.format(cmp_os_release), level=ERROR)
+            ctxt['vendordata_providers'] = ','.join(vdata_providers)
         for rid in relation_ids(self.rel_name):
             for unit in related_units(rid):
                 rdata = relation_get(rid=rid, unit=unit)
