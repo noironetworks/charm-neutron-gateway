@@ -8,7 +8,7 @@ include:
     - contrib.openstack|inc=*
     - contrib.hahelpers
     - contrib.network
-    - contrib.python.packages
+    - contrib.python
     - contrib.storage.linux
     - contrib.python
     - payload
