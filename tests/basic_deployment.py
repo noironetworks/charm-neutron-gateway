@@ -480,68 +480,6 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
             message = u.relation_error('nova-cc neutron-api', ret)
             amulet.raise_status(amulet.FAIL, msg=message)
 
-    def test_300_neutron_config(self):
-        """Verify the data in the neutron config file."""
-        u.log.debug('Checking neutron gateway config file data...')
-        unit = self.neutron_gateway_sentry
-        rmq_ng_rel = self.rmq_sentry.relation(
-            'amqp', 'neutron-gateway:amqp')
-
-        conf = '/etc/neutron/neutron.conf'
-        expected = {
-            'DEFAULT': {
-                'verbose': 'False',
-                'debug': 'False',
-                'core_plugin': 'ml2',
-                'control_exchange': 'neutron',
-                'notification_driver': 'messaging',
-            },
-            'agent': {
-                'root_helper': 'sudo /usr/bin/neutron-rootwrap '
-                               '/etc/neutron/rootwrap.conf'
-            }
-        }
-
-        if self._get_openstack_release() >= self.trusty_mitaka:
-            del expected['DEFAULT']['control_exchange']
-            del expected['DEFAULT']['notification_driver']
-            connection_uri = (
-                "rabbit://neutron:{}@{}:5672/"
-                "openstack".format(rmq_ng_rel['password'],
-                                   rmq_ng_rel['hostname'])
-            )
-            expected['oslo_messaging_notifications'] = {
-                'driver': 'messagingv2',
-                'transport_url': connection_uri
-            }
-
-        if self._get_openstack_release() >= self.trusty_kilo:
-            # Kilo or later
-            expected['oslo_messaging_rabbit'] = {
-                'rabbit_userid': 'neutron',
-                'rabbit_virtual_host': 'openstack',
-                'rabbit_password': rmq_ng_rel['password'],
-                'rabbit_host': rmq_ng_rel['hostname'],
-            }
-            expected['oslo_concurrency'] = {
-                'lock_path': '/var/lock/neutron'
-            }
-        else:
-            # Juno or earlier
-            expected['DEFAULT'].update({
-                'rabbit_userid': 'neutron',
-                'rabbit_virtual_host': 'openstack',
-                'rabbit_password': rmq_ng_rel['password'],
-                'rabbit_host': rmq_ng_rel['hostname'],
-                'lock_path': '/var/lock/neutron',
-            })
-
-        for section, pairs in expected.iteritems():
-            ret = u.validate_config_data(unit, conf, section, pairs)
-            if ret:
-                message = "neutron config error: {}".format(ret)
-                amulet.raise_status(amulet.FAIL, msg=message)
-
     def test_301_neutron_ml2_config(self):
         """Verify the data in the ml2 config file. This is only available
            since icehouse."""
