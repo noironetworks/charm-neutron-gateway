@@ -122,9 +122,10 @@ def config_changed():
 
     update_nrpe_config()
 
-    sysctl_dict = config('sysctl')
-    if sysctl_dict:
-        create_sysctl(sysctl_dict, '/etc/sysctl.d/50-quantum-gateway.conf')
+    sysctl_settings = config('sysctl')
+    if sysctl_settings:
+        create_sysctl(sysctl_settings,
+                      '/etc/sysctl.d/50-quantum-gateway.conf')
 
     if config('vendor-data'):
         write_vendordata(config('vendor-data'))

@@ -191,7 +191,15 @@ options:
       Enable metadata on an isolated network (no router ports).
   sysctl:
     type: string
-    default:
+    default: |
+      { net.ipv4.neigh.default.gc_thresh1 : 128,
+        net.ipv4.neigh.default.gc_thresh2 : 28672,
+        net.ipv4.neigh.default.gc_thresh3 : 32768,
+        net.ipv6.neigh.default.gc_thresh1 : 128,
+        net.ipv6.neigh.default.gc_thresh2 : 28672,
+        net.ipv6.neigh.default.gc_thresh3 : 32768,
+        net.nf_conntrack_max : 1000000,
+        net.netfilter.nf_conntrack_max : 1000000 }
     description: |
       YAML-formatted associative array of sysctl key/value pairs to be set
       persistently e.g. '{ kernel.pid_max : 4194303 }'.
