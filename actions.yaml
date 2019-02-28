@@ -4,3 +4,5 @@ pause:
     description: Pause the neutron-gateway unit.
 resume:
     descrpition: Resume the neutron-gateway unit.
+security-checklist:
+  description: Validate the running configuration against the OpenStack security guides checklist
