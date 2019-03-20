@@ -575,7 +575,11 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
         }
         section = 'fwaas'
 
-        if self._get_openstack_release() >= self.xenial_newton:
+        if self._get_openstack_release() >= self.bionic_stein:
+            # Stein or later
+            expected['driver'] = 'iptables_v2'
+            expected['agent_version'] = 'v2'
+        elif self._get_openstack_release() >= self.xenial_newton:
             # Newton or later
             expected['driver'] = 'iptables'
             expected['agent_version'] = 'v1'
