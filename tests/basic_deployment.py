@@ -919,8 +919,8 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
         action_id = u.run_action(sentry_unit, "security-checklist")
         u.wait_on_action(action_id)
         data = amulet.actions.get_action_output(action_id, full_output=True)
-        assert data.get(u"status") == "failed", \
-            "Security check is expected to not pass by default"
+        assert data.get(u"status") == "completed", \
+            "Security check is expected to pass by default"
 
     def test_900_restart_on_config_change(self):
         """Verify that the specified services are restarted when the
