@@ -154,6 +154,13 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
         self.neutron_gateway_sentry = self.d.sentry['neutron-gateway'][0]
         self.neutron_api_sentry = self.d.sentry['neutron-api'][0]
 
+        # pidof is failing to find neutron-server on stein
+        # use pgrep instead.
+        if self._get_openstack_release() >= self.bionic_stein:
+            self.pgrep_full = True
+        else:
+            self.pgrep_full = False
+
         # Authenticate admin with keystone
         self.keystone_session, self.keystone = u.get_default_keystone_session(
             self.keystone_sentry,
@@ -958,8 +965,8 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
         # sleep_time = 90
         for s, conf_file in services.iteritems():
             u.log.debug("Checking that service restarted: {}".format(s))
-            if not u.validate_service_config_changed(sentry, mtime, s,
-                                                     conf_file):
+            if not u.validate_service_config_changed(
+                    sentry, mtime, s, conf_file, pgrep_full=self.pgrep_full):
                 self.d.configure(juju_service, set_default)
                 msg = "service {} didn't restart after config change".format(s)
                 amulet.raise_status(amulet.FAIL, msg=msg)
@@ -1020,9 +1027,9 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
 
         for s, conf_file in services.iteritems():
             u.log.debug("Checking that service restarted: {}".format(s))
-            if not u.validate_service_config_changed(sentry, mtime, s,
-                                                     conf_file,
-                                                     sleep_time=sleep_time):
+            if not u.validate_service_config_changed(
+                    sentry, mtime, s, conf_file, sleep_time=sleep_time,
+                    pgrep_full=self.pgrep_full):
 
                 self.d.configure(juju_service, set_default)
                 msg = "service {} didn't restart after config change".format(s)
