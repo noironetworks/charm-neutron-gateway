@@ -63,6 +63,7 @@ TO_PATCH = [
     'remove_legacy_nova_metadata',
     'services',
     'remove_old_packages',
+    'is_container',
 ]
 
 
@@ -76,6 +77,7 @@ class TestQuantumHooks(CharmTestCase):
         self.lsb_release.return_value = {'DISTRIB_CODENAME': 'precise'}
         # passthrough
         self.b64decode.side_effect = lambda arg: arg
+        self.is_container.return_value = False
         hookenv.config.side_effect = self.test_config.get
         hooks.hooks._config_save = False
 
@@ -137,6 +139,28 @@ class TestQuantumHooks(CharmTestCase):
         self.create_sysctl.assert_called_with(
             '{foo : bar}',
             '/etc/sysctl.d/50-quantum-gateway.conf')
+
+    def test_config_changed_in_container(self):
+        self.disable_nova_metadata.return_value = False
+
+        def mock_relids(rel):
+            return ['relid']
+        self.test_config.set(
+            'sysctl',
+            '{foo : bar}'
+        )
+        self.openstack_upgrade_available.return_value = True
+        self.valid_plugin.return_value = True
+        self.relation_ids.side_effect = mock_relids
+        self.is_container.return_value = True
+        _amqp_joined = self.patch('amqp_joined')
+        _amqp_nova_joined = self.patch('amqp_nova_joined')
+        self._call_hook('config-changed')
+        self.assertTrue(self.do_openstack_upgrade.called)
+        self.assertTrue(self.configure_ovs.called)
+        self.assertTrue(_amqp_joined.called)
+        self.assertTrue(_amqp_nova_joined.called)
+        self.create_sysctl.assert_not_called()
 
     def test_config_changed_upgrade(self):
         self.disable_nova_metadata.return_value = False
