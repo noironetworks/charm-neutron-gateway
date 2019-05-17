@@ -2,7 +2,6 @@
 import os
 import uuid
 from charmhelpers.core.hookenv import (
-    log, ERROR,
     config,
     relation_get,
     relation_ids,
@@ -14,6 +13,8 @@ from charmhelpers.contrib.openstack.context import (
     OSContextGenerator,
     NeutronAPIContext,
     config_flags_parser,
+    NovaVendorMetadataContext,
+    NovaVendorMetadataJSONContext,
 )
 from charmhelpers.contrib.openstack.utils import (
     os_release,
@@ -163,32 +164,18 @@ class NeutronGatewayContext(NeutronAPIContext):
         return ctxt
 
 
-class NovaMetadataContext(OSContextGenerator):
+class NovaMetadataContext(NovaVendorMetadataContext):
 
     def __init__(self, rel_name='quantum-network-service'):
+        super(NovaMetadataContext, self).__init__('neutron-common', [rel_name])
         self.rel_name = rel_name
-        self.interfaces = [rel_name]
 
     def __call__(self):
         ctxt = {}
         cmp_os_release = CompareOpenStackReleases(os_release('neutron-common'))
         if cmp_os_release < 'rocky':
-            vdata_providers = []
-            vdata = config('vendor-data')
-            vdata_url = config('vendor-data-url')
-
-            if vdata:
-                ctxt['vendor_data'] = True
-                vdata_providers.append('StaticJSON')
-
-            if vdata_url:
-                if cmp_os_release > 'mitaka':
-                    ctxt['vendor_data_url'] = vdata_url
-                    vdata_providers.append('DynamicJSON')
-                else:
-                    log('Dynamic vendor data unsupported'
-                        ' for {}.'.format(cmp_os_release), level=ERROR)
-            ctxt['vendordata_providers'] = ','.join(vdata_providers)
+            # if release is Rocky or later, we don't set vendor metadata here
+            ctxt.update(super(NovaMetadataContext, self).__call__())
         for rid in relation_ids(self.rel_name):
             for unit in related_units(rid):
                 rdata = relation_get(rid=rid, unit=unit)
@@ -205,6 +192,20 @@ class NovaMetadataContext(OSContextGenerator):
             ctxt['nova_metadata_port'] = '8775'
             ctxt['nova_metadata_protocol'] = 'http'
         return ctxt
+
+
+class NovaMetadataJSONContext(NovaVendorMetadataJSONContext):
+
+    def __call__(self):
+        vdata_values = super(NovaMetadataJSONContext, self).__call__()
+
+        cmp_os_release = CompareOpenStackReleases(os_release('neutron-common'))
+
+        if cmp_os_release < 'rocky':
+            return vdata_values
+        else:
+            # if release is Rocky or later, we don't set vendor metadata here
+            return {'vendor_data_json': '{}'}
 
 
 SHARED_SECRET = "/etc/{}/secret.txt"

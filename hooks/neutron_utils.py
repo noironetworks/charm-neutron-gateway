@@ -1,5 +1,4 @@
 import os
-import json
 import shutil
 import subprocess
 from shutil import copy2
@@ -76,6 +75,7 @@ from neutron_contexts import (
     NeutronGatewayContext,
     L3AgentContext,
     NovaMetadataContext,
+    NovaMetadataJSONContext,
 )
 from charmhelpers.contrib.openstack.neutron import (
     parse_bridge_mappings,
@@ -338,6 +338,7 @@ NEUTRON_FWAAS_CONF = "/etc/neutron/fwaas_driver.ini"
 
 NOVA_CONF_DIR = '/etc/nova'
 NOVA_CONF = "/etc/nova/nova.conf"
+VENDORDATA_FILE = '%s/vendor_data.json' % NOVA_CONF_DIR
 
 NOVA_CONFIG_FILES = {
     NOVA_CONF: {
@@ -355,6 +356,10 @@ NOVA_CONFIG_FILES = {
         'hook_contexts': [
             context.AppArmorContext(NOVA_API_METADATA_AA_PROFILE)
         ],
+    },
+    VENDORDATA_FILE: {
+        'services': [],
+        'hook_contexts': [NovaMetadataJSONContext('neutron-common')],
     },
 }
 
@@ -1066,20 +1071,6 @@ def configure_apparmor():
         profiles.append(NEUTRON_LBAASV2_AA_PROFILE)
     for profile in profiles:
         context.AppArmorContext(profile).setup_aa_profile()
-
-
-VENDORDATA_FILE = '/etc/nova/vendor_data.json'
-
-
-def write_vendordata(vdata):
-    try:
-        json_vdata = json.loads(vdata)
-    except (TypeError, json.decoder.JSONDecodeError) as e:
-        log('Error decoding vendor-data. {}'.format(e), level=ERROR)
-        return False
-    with open(VENDORDATA_FILE, 'w') as vdata_file:
-        vdata_file.write(json.dumps(json_vdata, sort_keys=True, indent=2))
-    return True
 
 
 def get_availability_zone():
