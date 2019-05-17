@@ -258,8 +258,10 @@ class TestNeutronUtils(CharmTestCase):
         ])
         self.add_bridge_port.assert_called_with('br-ex', 'eth0')
 
+    @patch('charmhelpers.contrib.openstack.context.list_nics',
+           return_value=['eth0', 'eth0.100', 'eth0.200'])
     @patch('charmhelpers.contrib.openstack.context.config')
-    def test_configure_ovs_ovs_data_port(self, mock_config):
+    def test_configure_ovs_ovs_data_port(self, mock_config, _nics):
         self.is_linuxbridge_interface.return_value = False
         mock_config.side_effect = self.test_config.get
         self.config.side_effect = self.test_config.get
@@ -306,8 +308,10 @@ class TestNeutronUtils(CharmTestCase):
                  call('br1', 'eth0.200', promisc=True)]
         self.add_bridge_port.assert_has_calls(calls, any_order=True)
 
+    @patch('charmhelpers.contrib.openstack.context.list_nics',
+           return_value=['br-eth0'])
     @patch('charmhelpers.contrib.openstack.context.config')
-    def test_configure_ovs_ovs_data_port_bridge(self, mock_config):
+    def test_configure_ovs_ovs_data_port_bridge(self, mock_config, _nics):
         self.is_linuxbridge_interface.return_value = True
         mock_config.side_effect = self.test_config.get
         self.config.side_effect = self.test_config.get
