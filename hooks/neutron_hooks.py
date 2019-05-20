@@ -21,6 +21,7 @@ from charmhelpers.fetch import (
     apt_purge,
 )
 from charmhelpers.core.host import (
+    is_container,
     lsb_release,
 )
 from charmhelpers.contrib.hahelpers.cluster import(
@@ -124,8 +125,11 @@ def config_changed():
 
     sysctl_settings = config('sysctl')
     if sysctl_settings:
-        create_sysctl(sysctl_settings,
-                      '/etc/sysctl.d/50-quantum-gateway.conf')
+        if is_container():
+            log("Cannot create sysctls inside of a container", level=WARNING)
+        else:
+            create_sysctl(sysctl_settings,
+                          '/etc/sysctl.d/50-quantum-gateway.conf')
 
     if config('vendor-data'):
         write_vendordata(config('vendor-data'))
