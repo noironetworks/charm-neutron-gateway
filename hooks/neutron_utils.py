@@ -155,6 +155,7 @@ GATEWAY_PKGS = {
         "nova-api-metadata",
         "neutron-metering-agent",
         "neutron-lbaas-agent",
+        "libnetfilter-log1",  # fwaas_v2_log
     ],
     NSX: [
         "neutron-dhcp-agent",
@@ -197,6 +198,7 @@ PY3_PACKAGES = [
     'python3-neutron',
     'python3-neutron-fwaas',
     'python3-neutron-lbaas',
+    'python3-zmq',  # fwaas_v2_log
 ]
 
 EARLY_PACKAGES = {
