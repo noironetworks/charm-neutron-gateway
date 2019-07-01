@@ -308,3 +308,29 @@ options:
       for Neutron agents (DHCP and L3 agents). This option overrides the
       default-availability-zone charm config setting only when the Juju
       provider sets JUJU_AVAILABILITY_ZONE.
+  firewall-group-log-output-base:
+    type: string
+    default:
+    description: |
+      This option allows setting a path for Firewall Group logs.
+      A valid file system path must be provided. If this option is not
+      provided Neutron will use syslog as a destination.
+      (Available from Stein)
+  firewall-group-log-rate-limit:
+    type: int
+    default:
+    description: |
+      Log entries are queued for writing to a log file when a packet rate
+      exceeds the limit set by this option.
+      Possible values: null (no rate limitation), integer values greater than 100.
+      WARNING: Should be NOT LESS than 100, if set (if null logging will not be
+      rate limited).
+      (Available from Stein)
+  firewall-group-log-burst-limit:
+    type: int
+    default: 25
+    description: |
+      This option sets the maximum queue size for log entries.
+      Can be used to avoid excessive memory consumption.
+      WARNING: Should be NOT LESS than 25.
+      (Available from Stein)

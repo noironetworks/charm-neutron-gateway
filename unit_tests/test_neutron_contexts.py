@@ -156,6 +156,7 @@ class TestNeutronGatewayContext(CharmTestCase):
         self.config.side_effect = self.test_config.get
         self.maxDiff = None
 
+    @patch.object(neutron_contexts, 'validate_nfg_log_path', lambda x: x)
     @patch('neutron_utils.config')
     @patch('charmhelpers.contrib.openstack.context.relation_get')
     @patch('charmhelpers.contrib.openstack.context.related_units')
@@ -168,7 +169,8 @@ class TestNeutronGatewayContext(CharmTestCase):
                  'enable-l3ha': 'True',
                  'enable-qos': 'True',
                  'network-device-mtu': 9000,
-                 'dns-domain': 'openstack.example.'}
+                 'dns-domain': 'openstack.example.',
+                 'enable-nfg-logging': 'True'}
         self.test_config.set('plugin', 'ovs')
         self.test_config.set('debug', False)
         self.test_config.set('verbose', True)
@@ -179,6 +181,10 @@ class TestNeutronGatewayContext(CharmTestCase):
         self.test_config.set('vlan-ranges',
                              'physnet1:1000:2000 physnet2:2001:3000')
         self.test_config.set('flat-network-providers', 'physnet3 physnet4')
+        self.test_config.set('firewall-group-log-output-base',
+                             '/var/log/firewall-logs')
+        self.test_config.set('firewall-group-log-rate-limit', 100)
+        self.test_config.set('firewall-group-log-burst-limit', 50)
 
         def config_side_effect(key):
             return {
@@ -224,8 +230,13 @@ class TestNeutronGatewayContext(CharmTestCase):
                 'dhcp-match': 'set:ipxe,175'
             },
             'availability_zone': 'nova',
+            'enable_nfg_logging': True,
+            'nfg_log_burst_limit': 50,
+            'nfg_log_output_base': '/var/log/firewall-logs',
+            'nfg_log_rate_limit': 100,
         })
 
+    @patch.object(neutron_contexts, 'validate_nfg_log_path', lambda x: x)
     @patch('neutron_utils.config')
     @patch('charmhelpers.contrib.openstack.context.relation_get')
     @patch('charmhelpers.contrib.openstack.context.related_units')
@@ -294,6 +305,10 @@ class TestNeutronGatewayContext(CharmTestCase):
                 'dhcp-match': 'set:ipxe,175'
             },
             'availability_zone': 'nova',
+            'enable_nfg_logging': False,
+            'nfg_log_burst_limit': 25,
+            'nfg_log_output_base': None,
+            'nfg_log_rate_limit': None,
         })
 
     @patch('charmhelpers.contrib.openstack.context.relation_get')
@@ -400,6 +415,19 @@ class TestNeutronGatewayContext(CharmTestCase):
         context = neutron_contexts.NeutronGatewayContext()
         self.assertEqual(
             'az1', context()['availability_zone'])
+
+    @patch('charmhelpers.contrib.openstack.context.relation_get')
+    @patch('charmhelpers.contrib.openstack.context.related_units')
+    @patch('charmhelpers.contrib.openstack.context.relation_ids')
+    @patch.object(neutron_contexts, 'get_shared_secret')
+    def test_nfg_min_settings(self, _secret, _rids, _runits, _rget):
+        self.test_config.set('firewall-group-log-rate-limit', 90)
+        self.test_config.set('firewall-group-log-burst-limit', 20)
+        self.network_get_primary_address.return_value = '192.168.20.2'
+        self.unit_get.return_value = '10.5.0.1'
+        ctxt = neutron_contexts.NeutronGatewayContext()()
+        self.assertEqual(ctxt['nfg_log_burst_limit'], 25)
+        self.assertEqual(ctxt['nfg_log_rate_limit'], 100)
 
 
 class TestSharedSecret(CharmTestCase):

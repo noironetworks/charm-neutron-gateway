@@ -8,6 +8,7 @@ from charmhelpers.core.hookenv import (
     related_units,
     unit_get,
     network_get_primary_address,
+    log,
 )
 from charmhelpers.contrib.openstack.context import (
     OSContextGenerator,
@@ -48,6 +49,9 @@ CORE_PLUGIN = {
     NSX: NEUTRON_NSX_PLUGIN,
     OVS_ODL: NEUTRON_OVS_ODL_PLUGIN,
 }
+
+NFG_LOG_RATE_LIMIT_MIN = 100
+NFG_LOG_BURST_LIMIT_MIN = 25
 
 
 def _get_availability_zone():
@@ -107,6 +111,33 @@ class L3AgentContext(OSContextGenerator):
         return ctxt
 
 
+def validate_nfg_log_path(desired_nfg_log_path):
+    if not desired_nfg_log_path:
+        # None means "we need to use syslog" - no need
+        # to check anything on filesystem
+        return None
+
+    dst_dir, _ = os.path.split(desired_nfg_log_path)
+    path_exists = os.path.exists(dst_dir)
+    if not path_exists:
+        log(
+            "Desired NFG log directory {} not exists! "
+            "falling back to syslog".format(dst_dir),
+            "WARN"
+        )
+        return None
+
+    if path_exists and os.path.isdir(desired_nfg_log_path):
+        log(
+            "Desired NFG log path {} should be file, not directory! "
+            "falling back to syslog".format(desired_nfg_log_path),
+            "WARN"
+        )
+        return None
+
+    return desired_nfg_log_path
+
+
 class NeutronGatewayContext(NeutronAPIContext):
 
     def __call__(self):
@@ -131,6 +162,7 @@ class NeutronGatewayContext(NeutronAPIContext):
             'enable_metadata_network': config('enable-metadata-network'),
             'enable_isolated_metadata': config('enable-isolated-metadata'),
             'availability_zone': _get_availability_zone(),
+            'enable_nfg_logging': api_settings['enable_nfg_logging'],
         }
 
         ctxt['local_ip'] = get_local_ip()
@@ -160,6 +192,26 @@ class NeutronGatewayContext(NeutronAPIContext):
         if ctxt['plugin'] in ['nvp', 'nsx', 'n1kv']:
             ctxt['enable_metadata_network'] = True
             ctxt['enable_isolated_metadata'] = True
+
+        ctxt['nfg_log_output_base'] = validate_nfg_log_path(
+            config('firewall-group-log-output-base')
+        )
+        ctxt['nfg_log_rate_limit'] = config(
+            'firewall-group-log-rate-limit'
+        )
+        if ctxt['nfg_log_rate_limit'] is not None:
+            ctxt['nfg_log_rate_limit'] = max(
+                ctxt['nfg_log_rate_limit'],
+                NFG_LOG_RATE_LIMIT_MIN
+            )
+        ctxt['nfg_log_burst_limit'] = config(
+            'firewall-group-log-burst-limit'
+        )
+        if ctxt['nfg_log_burst_limit'] is not None:
+            ctxt['nfg_log_burst_limit'] = max(
+                ctxt['nfg_log_burst_limit'],
+                NFG_LOG_BURST_LIMIT_MIN
+            )
 
         return ctxt
 
