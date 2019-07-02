@@ -562,7 +562,6 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
             'dhcp_driver': 'neutron.agent.linux.dhcp.Dnsmasq',
             'root_helper': 'sudo /usr/bin/neutron-rootwrap '
                            '/etc/neutron/rootwrap.conf',
-            'ovs_use_veth': 'True'
         }
         section = 'DEFAULT'
 
@@ -623,7 +622,6 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
             'interface_driver': interface_driver,
             'root_helper': 'sudo /usr/bin/neutron-rootwrap '
                            '/etc/neutron/rootwrap.conf',
-            'ovs_use_veth': 'True',
             'handle_internal_only_routers': 'True'
         }
         section = 'DEFAULT'
@@ -651,7 +649,6 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
             'DEFAULT': {
                 'interface_driver': interface_driver,
                 'periodic_interval': '10',
-                'ovs_use_veth': 'False',
             },
             'haproxy': {
                 'loadbalancer_state_path': '$state_path/lbaas',
@@ -664,7 +661,6 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
                 ('neutron_lbaas.drivers.haproxy.namespace_driver.'
                  'HaproxyNSDriver')
             expected['DEFAULT'].pop('periodic_interval')
-            expected['DEFAULT'].pop('ovs_use_veth')
         elif self._get_openstack_release() >= self.trusty_kilo:
             expected['DEFAULT']['device_driver'] = \
                 ('neutron_lbaas.services.loadbalancer.drivers.haproxy.'
