@@ -51,7 +51,7 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
            """
         this_service = {'name': 'neutron-gateway'}
         other_services = [
-            {'name': 'percona-cluster', 'constraints': {'mem': '3072M'}},
+            self.get_percona_service_entry(),
             {'name': 'rabbitmq-server'},
             {'name': 'keystone'},
             {'name': 'glance'},  # satisfy workload status
