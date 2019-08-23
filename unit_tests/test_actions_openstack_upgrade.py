@@ -7,14 +7,13 @@ from test_utils import (
 
 os.environ['JUJU_UNIT_NAME'] = 'neutron-gateway'
 
-with patch('charmhelpers.core.hookenv.config'):
-    with patch('neutron_utils.restart_map'):
-        with patch('neutron_utils.register_configs'):
-            import openstack_upgrade
+import openstack_upgrade
 
 TO_PATCH = [
     'do_openstack_upgrade',
     'config_changed',
+    'charmhelpers.core.hookenv.log',
+    'charmhelpers.contrib.openstack.utils.juju_log',
 ]
 
 

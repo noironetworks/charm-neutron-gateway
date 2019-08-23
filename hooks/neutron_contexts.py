@@ -54,9 +54,11 @@ NFG_LOG_RATE_LIMIT_MIN = 100
 NFG_LOG_BURST_LIMIT_MIN = 25
 
 
-def _get_availability_zone():
-    from neutron_utils import get_availability_zone as get_az
-    return get_az()
+def get_availability_zone():
+    use_juju_az = config('customize-failure-domain')
+    juju_az = os.environ.get('JUJU_AVAILABILITY_ZONE')
+    return (juju_az if use_juju_az and juju_az
+            else config('default-availability-zone'))
 
 
 def core_plugin():
@@ -161,7 +163,7 @@ class NeutronGatewayContext(NeutronAPIContext):
             'report_interval': api_settings['report_interval'],
             'enable_metadata_network': config('enable-metadata-network'),
             'enable_isolated_metadata': config('enable-isolated-metadata'),
-            'availability_zone': _get_availability_zone(),
+            'availability_zone': get_availability_zone(),
             'enable_nfg_logging': api_settings['enable_nfg_logging'],
         }
 

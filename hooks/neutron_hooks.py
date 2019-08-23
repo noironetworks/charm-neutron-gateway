@@ -75,7 +75,23 @@ from neutron_utils import (
 )
 
 hooks = Hooks()
-CONFIGS = register_configs()
+# Note that CONFIGS is now set up via resolve_CONFIGS so that it is not a
+# module load time constraint.
+CONFIGS = None
+
+
+def resolve_CONFIGS():
+    """lazy function to resolve the CONFIGS so that it doesn't have to evaluate
+    at module load time.  Note that it also returns the CONFIGS so that it can
+    be used in other, module loadtime, functions.
+
+    :returns: CONFIGS variable
+    :rtype: `:class:templating.OSConfigRenderer`
+    """
+    global CONFIGS
+    if CONFIGS is None:
+        CONFIGS = register_configs()
+    return CONFIGS
 
 
 @hooks.hook('install')
@@ -111,10 +127,9 @@ def install():
 
 
 @hooks.hook('config-changed')
-@restart_on_change(restart_map())
+@restart_on_change(restart_map)
 @harden()
 def config_changed():
-    global CONFIGS
     if not config('action-managed-upgrade'):
         if openstack_upgrade_available(NEUTRON_COMMON):
             status_set('maintenance', 'Running openstack upgrade')
@@ -191,7 +206,7 @@ def amqp_joined(relation_id=None):
 
 @hooks.hook('amqp-nova-relation-departed')
 @hooks.hook('amqp-nova-relation-changed')
-@restart_on_change(restart_map())
+@restart_on_change(restart_map)
 def amqp_nova_changed():
     if 'amqp-nova' not in CONFIGS.complete_contexts():
         log('amqp relation incomplete. Peer not ready?')
@@ -200,7 +215,7 @@ def amqp_nova_changed():
 
 
 @hooks.hook('amqp-relation-departed')
-@restart_on_change(restart_map())
+@restart_on_change(restart_map)
 def amqp_departed():
     if 'amqp' not in CONFIGS.complete_contexts():
         log('amqp relation incomplete. Peer not ready?')
@@ -211,13 +226,13 @@ def amqp_departed():
 @hooks.hook('amqp-relation-changed',
             'cluster-relation-changed',
             'cluster-relation-joined')
-@restart_on_change(restart_map())
+@restart_on_change(restart_map)
 def amqp_changed():
     CONFIGS.write_all()
 
 
 @hooks.hook('neutron-plugin-api-relation-changed')
-@restart_on_change(restart_map())
+@restart_on_change(restart_map)
 def neutron_plugin_api_changed():
     if use_l3ha():
         apt_update()
@@ -226,7 +241,7 @@ def neutron_plugin_api_changed():
 
 
 @hooks.hook('quantum-network-service-relation-changed')
-@restart_on_change(restart_map())
+@restart_on_change(restart_map)
 def nm_changed():
     CONFIGS.write_all()
     if relation_get('ca_cert'):
@@ -255,7 +270,7 @@ def nm_changed():
 
 
 @hooks.hook("cluster-relation-departed")
-@restart_on_change(restart_map())
+@restart_on_change(restart_map)
 def cluster_departed():
     if config('plugin') in ['nvp', 'nsx']:
         log('Unable to re-assign agent resources for'
@@ -357,9 +372,14 @@ def post_series_upgrade():
         resume_unit_helper, CONFIGS)
 
 
-if __name__ == '__main__':
+def main():
     try:
         hooks.execute(sys.argv)
     except UnregisteredHookError as e:
         log('Unknown hook {} - skipping.'.format(e))
     assess_status(CONFIGS)
+
+
+if __name__ == '__main__':
+    resolve_CONFIGS()
+    main()

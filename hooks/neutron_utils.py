@@ -342,235 +342,257 @@ NOVA_CONF_DIR = '/etc/nova'
 NOVA_CONF = "/etc/nova/nova.conf"
 VENDORDATA_FILE = '%s/vendor_data.json' % NOVA_CONF_DIR
 
-NOVA_CONFIG_FILES = {
-    NOVA_CONF: {
-        'hook_contexts': [NetworkServiceContext(),
-                          NeutronGatewayContext(),
-                          SyslogContext(),
-                          context.WorkerConfigContext(),
-                          context.ZeroMQContext(),
-                          context.NotificationDriverContext(),
-                          NovaMetadataContext()],
-        'services': ['nova-api-metadata']
-    },
-    NOVA_API_METADATA_AA_PROFILE_PATH: {
-        'services': ['nova-api-metadata'],
-        'hook_contexts': [
-            context.AppArmorContext(NOVA_API_METADATA_AA_PROFILE)
-        ],
-    },
-    VENDORDATA_FILE: {
-        'services': [],
-        'hook_contexts': [NovaMetadataJSONContext('neutron-common')],
-    },
-}
+__NOVA_CONFIG_FILES = None
+__CONFIG_FILES = None
 
-NEUTRON_SHARED_CONFIG_FILES = {
-    NEUTRON_DHCP_AGENT_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-dhcp-agent']
-    },
-    NEUTRON_DNSMASQ_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-dhcp-agent']
-    },
-    NEUTRON_METADATA_AGENT_CONF: {
-        'hook_contexts': [NetworkServiceContext(),
-                          context.WorkerConfigContext(),
-                          NeutronGatewayContext(),
-                          NovaMetadataContext()],
-        'services': ['neutron-metadata-agent']
-    },
-    NEUTRON_DHCP_AA_PROFILE_PATH: {
-        'services': ['neutron-dhcp-agent'],
-        'hook_contexts': [
-            context.AppArmorContext(NEUTRON_DHCP_AA_PROFILE)
-        ],
-    },
-    NEUTRON_LBAAS_AA_PROFILE_PATH: {
-        'services': ['neutron-lbaas-agent'],
-        'hook_contexts': [
-            context.AppArmorContext(NEUTRON_LBAAS_AA_PROFILE)
-        ],
-    },
-    NEUTRON_LBAASV2_AA_PROFILE_PATH: {
-        'services': ['neutron-lbaasv2-agent'],
-        'hook_contexts': [
-            context.AppArmorContext(NEUTRON_LBAASV2_AA_PROFILE)
-        ],
-    },
-    NEUTRON_METADATA_AA_PROFILE_PATH: {
-        'services': ['neutron-metadata-agent'],
-        'hook_contexts': [
-            context.AppArmorContext(NEUTRON_METADATA_AA_PROFILE)
-        ],
-    },
-    NEUTRON_METERING_AA_PROFILE_PATH: {
-        'services': ['neutron-metering-agent'],
-        'hook_contexts': [
-            context.AppArmorContext(NEUTRON_METERING_AA_PROFILE)
-        ],
-    },
-}
-NEUTRON_SHARED_CONFIG_FILES.update(NOVA_CONFIG_FILES)
 
-NEUTRON_OVS_CONFIG_FILES = {
-    NEUTRON_CONF: {
-        'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
-                          NeutronGatewayContext(),
-                          SyslogContext(),
-                          context.ZeroMQContext(),
-                          context.WorkerConfigContext(),
-                          context.NotificationDriverContext()],
-        'services': ['neutron-l3-agent',
-                     'neutron-dhcp-agent',
-                     'neutron-metadata-agent',
-                     'neutron-plugin-openvswitch-agent',
-                     'neutron-plugin-metering-agent',
-                     'neutron-metering-agent',
-                     'neutron-lbaas-agent',
-                     'neutron-vpn-agent']
-    },
-    NEUTRON_L3_AGENT_CONF: {
-        'hook_contexts': [NetworkServiceContext(),
-                          L3AgentContext(),
-                          NeutronGatewayContext()],
-        'services': ['neutron-l3-agent', 'neutron-vpn-agent']
-    },
-    NEUTRON_METERING_AGENT_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-plugin-metering-agent',
-                     'neutron-metering-agent']
-    },
-    NEUTRON_LBAAS_AGENT_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-lbaas-agent']
-    },
-    NEUTRON_VPNAAS_AGENT_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-vpn-agent']
-    },
-    NEUTRON_FWAAS_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-l3-agent', 'neutron-vpn-agent']
-    },
-    NEUTRON_ML2_PLUGIN_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-plugin-openvswitch-agent']
-    },
-    NEUTRON_OVS_AGENT_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-plugin-openvswitch-agent']
-    },
-    NEUTRON_OVS_AA_PROFILE_PATH: {
-        'services': ['neutron-plugin-openvswitch-agent'],
-        'hook_contexts': [
-            context.AppArmorContext(NEUTRON_OVS_AA_PROFILE)
-        ],
-    },
-    NEUTRON_L3_AA_PROFILE_PATH: {
-        'services': ['neutron-l3-agent', 'neutron-vpn-agent'],
-        'hook_contexts': [
-            context.AppArmorContext(NEUTRON_L3_AA_PROFILE)
-        ],
-    },
-    EXT_PORT_CONF: {
-        'hook_contexts': [ExternalPortContext()],
-        'services': ['ext-port']
-    },
-    PHY_NIC_MTU_CONF: {
-        'hook_contexts': [PhyNICMTUContext()],
-        'services': ['os-charm-phy-nic-mtu']
+def get_nova_config_files():
+    global __NOVA_CONFIG_FILES
+    if __NOVA_CONFIG_FILES is not None:
+        return __NOVA_CONFIG_FILES
+
+    NOVA_CONFIG_FILES = {
+        NOVA_CONF: {
+            'hook_contexts': [NetworkServiceContext(),
+                              NeutronGatewayContext(),
+                              SyslogContext(),
+                              context.WorkerConfigContext(),
+                              context.ZeroMQContext(),
+                              context.NotificationDriverContext(),
+                              NovaMetadataContext()],
+            'services': ['nova-api-metadata']
+        },
+        NOVA_API_METADATA_AA_PROFILE_PATH: {
+            'services': ['nova-api-metadata'],
+            'hook_contexts': [
+                context.AppArmorContext(NOVA_API_METADATA_AA_PROFILE)
+            ],
+        },
+        VENDORDATA_FILE: {
+            'services': [],
+            'hook_contexts': [NovaMetadataJSONContext('neutron-common')],
+        },
     }
-}
-NEUTRON_OVS_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
 
-NEUTRON_OVS_ODL_CONFIG_FILES = {
-    NEUTRON_CONF: {
-        'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
-                          NeutronGatewayContext(),
-                          SyslogContext(),
-                          context.ZeroMQContext(),
-                          context.WorkerConfigContext(),
-                          context.NotificationDriverContext()],
-        'services': ['neutron-l3-agent',
-                     'neutron-dhcp-agent',
-                     'neutron-metadata-agent',
-                     'neutron-plugin-metering-agent',
-                     'neutron-metering-agent',
-                     'neutron-lbaas-agent',
-                     'neutron-vpn-agent']
-    },
-    NEUTRON_L3_AGENT_CONF: {
-        'hook_contexts': [NetworkServiceContext(),
-                          L3AgentContext(),
-                          NeutronGatewayContext()],
-        'services': ['neutron-l3-agent', 'neutron-vpn-agent']
-    },
-    NEUTRON_METERING_AGENT_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-plugin-metering-agent',
-                     'neutron-metering-agent']
-    },
-    NEUTRON_LBAAS_AGENT_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-lbaas-agent']
-    },
-    NEUTRON_VPNAAS_AGENT_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-vpn-agent']
-    },
-    NEUTRON_FWAAS_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-l3-agent', 'neutron-vpn-agent']
-    },
-    EXT_PORT_CONF: {
-        'hook_contexts': [ExternalPortContext()],
-        'services': ['ext-port']
-    },
-    PHY_NIC_MTU_CONF: {
-        'hook_contexts': [PhyNICMTUContext()],
-        'services': ['os-charm-phy-nic-mtu']
+    return NOVA_CONFIG_FILES
+
+
+def get_config_files():
+    global __CONFIG_FILES
+    if __CONFIG_FILES is not None:
+        return __CONFIG_FILES
+
+    NOVA_CONFIG_FILES = get_nova_config_files()
+
+    NEUTRON_SHARED_CONFIG_FILES = {
+        NEUTRON_DHCP_AGENT_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-dhcp-agent']
+        },
+        NEUTRON_DNSMASQ_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-dhcp-agent']
+        },
+        NEUTRON_METADATA_AGENT_CONF: {
+            'hook_contexts': [NetworkServiceContext(),
+                              context.WorkerConfigContext(),
+                              NeutronGatewayContext(),
+                              NovaMetadataContext()],
+            'services': ['neutron-metadata-agent']
+        },
+        NEUTRON_DHCP_AA_PROFILE_PATH: {
+            'services': ['neutron-dhcp-agent'],
+            'hook_contexts': [
+                context.AppArmorContext(NEUTRON_DHCP_AA_PROFILE)
+            ],
+        },
+        NEUTRON_LBAAS_AA_PROFILE_PATH: {
+            'services': ['neutron-lbaas-agent'],
+            'hook_contexts': [
+                context.AppArmorContext(NEUTRON_LBAAS_AA_PROFILE)
+            ],
+        },
+        NEUTRON_LBAASV2_AA_PROFILE_PATH: {
+            'services': ['neutron-lbaasv2-agent'],
+            'hook_contexts': [
+                context.AppArmorContext(NEUTRON_LBAASV2_AA_PROFILE)
+            ],
+        },
+        NEUTRON_METADATA_AA_PROFILE_PATH: {
+            'services': ['neutron-metadata-agent'],
+            'hook_contexts': [
+                context.AppArmorContext(NEUTRON_METADATA_AA_PROFILE)
+            ],
+        },
+        NEUTRON_METERING_AA_PROFILE_PATH: {
+            'services': ['neutron-metering-agent'],
+            'hook_contexts': [
+                context.AppArmorContext(NEUTRON_METERING_AA_PROFILE)
+            ],
+        },
     }
-}
-NEUTRON_OVS_ODL_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
+    NEUTRON_SHARED_CONFIG_FILES.update(NOVA_CONFIG_FILES)
 
-NEUTRON_NSX_CONFIG_FILES = {
-    NEUTRON_CONF: {
-        'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
-                          NeutronGatewayContext(),
-                          context.WorkerConfigContext(),
-                          SyslogContext()],
-        'services': ['neutron-dhcp-agent', 'neutron-metadata-agent']
-    },
-}
-NEUTRON_NSX_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
+    NEUTRON_OVS_CONFIG_FILES = {
+        NEUTRON_CONF: {
+            'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
+                              NeutronGatewayContext(),
+                              SyslogContext(),
+                              context.ZeroMQContext(),
+                              context.WorkerConfigContext(),
+                              context.NotificationDriverContext()],
+            'services': ['neutron-l3-agent',
+                         'neutron-dhcp-agent',
+                         'neutron-metadata-agent',
+                         'neutron-plugin-openvswitch-agent',
+                         'neutron-plugin-metering-agent',
+                         'neutron-metering-agent',
+                         'neutron-lbaas-agent',
+                         'neutron-vpn-agent']
+        },
+        NEUTRON_L3_AGENT_CONF: {
+            'hook_contexts': [NetworkServiceContext(),
+                              L3AgentContext(),
+                              NeutronGatewayContext()],
+            'services': ['neutron-l3-agent', 'neutron-vpn-agent']
+        },
+        NEUTRON_METERING_AGENT_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-plugin-metering-agent',
+                         'neutron-metering-agent']
+        },
+        NEUTRON_LBAAS_AGENT_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-lbaas-agent']
+        },
+        NEUTRON_VPNAAS_AGENT_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-vpn-agent']
+        },
+        NEUTRON_FWAAS_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-l3-agent', 'neutron-vpn-agent']
+        },
+        NEUTRON_ML2_PLUGIN_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-plugin-openvswitch-agent']
+        },
+        NEUTRON_OVS_AGENT_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-plugin-openvswitch-agent']
+        },
+        NEUTRON_OVS_AA_PROFILE_PATH: {
+            'services': ['neutron-plugin-openvswitch-agent'],
+            'hook_contexts': [
+                context.AppArmorContext(NEUTRON_OVS_AA_PROFILE)
+            ],
+        },
+        NEUTRON_L3_AA_PROFILE_PATH: {
+            'services': ['neutron-l3-agent', 'neutron-vpn-agent'],
+            'hook_contexts': [
+                context.AppArmorContext(NEUTRON_L3_AA_PROFILE)
+            ],
+        },
+        EXT_PORT_CONF: {
+            'hook_contexts': [ExternalPortContext()],
+            'services': ['ext-port']
+        },
+        PHY_NIC_MTU_CONF: {
+            'hook_contexts': [PhyNICMTUContext()],
+            'services': ['os-charm-phy-nic-mtu']
+        }
+    }
+    NEUTRON_OVS_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
 
-NEUTRON_N1KV_CONFIG_FILES = {
-    NEUTRON_CONF: {
-        'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
-                          NeutronGatewayContext(),
-                          context.WorkerConfigContext(),
-                          SyslogContext()],
-        'services': ['neutron-l3-agent',
-                     'neutron-dhcp-agent',
-                     'neutron-metadata-agent']
-    },
-    NEUTRON_L3_AGENT_CONF: {
-        'hook_contexts': [NetworkServiceContext(),
-                          L3AgentContext(),
-                          NeutronGatewayContext()],
-        'services': ['neutron-l3-agent']
-    },
-}
-NEUTRON_N1KV_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
+    NEUTRON_OVS_ODL_CONFIG_FILES = {
+        NEUTRON_CONF: {
+            'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
+                              NeutronGatewayContext(),
+                              SyslogContext(),
+                              context.ZeroMQContext(),
+                              context.WorkerConfigContext(),
+                              context.NotificationDriverContext()],
+            'services': ['neutron-l3-agent',
+                         'neutron-dhcp-agent',
+                         'neutron-metadata-agent',
+                         'neutron-plugin-metering-agent',
+                         'neutron-metering-agent',
+                         'neutron-lbaas-agent',
+                         'neutron-vpn-agent']
+        },
+        NEUTRON_L3_AGENT_CONF: {
+            'hook_contexts': [NetworkServiceContext(),
+                              L3AgentContext(),
+                              NeutronGatewayContext()],
+            'services': ['neutron-l3-agent', 'neutron-vpn-agent']
+        },
+        NEUTRON_METERING_AGENT_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-plugin-metering-agent',
+                         'neutron-metering-agent']
+        },
+        NEUTRON_LBAAS_AGENT_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-lbaas-agent']
+        },
+        NEUTRON_VPNAAS_AGENT_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-vpn-agent']
+        },
+        NEUTRON_FWAAS_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-l3-agent', 'neutron-vpn-agent']
+        },
+        EXT_PORT_CONF: {
+            'hook_contexts': [ExternalPortContext()],
+            'services': ['ext-port']
+        },
+        PHY_NIC_MTU_CONF: {
+            'hook_contexts': [PhyNICMTUContext()],
+            'services': ['os-charm-phy-nic-mtu']
+        }
+    }
+    NEUTRON_OVS_ODL_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
 
-CONFIG_FILES = {
-    NSX: NEUTRON_NSX_CONFIG_FILES,
-    OVS: NEUTRON_OVS_CONFIG_FILES,
-    N1KV: NEUTRON_N1KV_CONFIG_FILES,
-    OVS_ODL: NEUTRON_OVS_ODL_CONFIG_FILES
-}
+    NEUTRON_NSX_CONFIG_FILES = {
+        NEUTRON_CONF: {
+            'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
+                              NeutronGatewayContext(),
+                              context.WorkerConfigContext(),
+                              SyslogContext()],
+            'services': ['neutron-dhcp-agent', 'neutron-metadata-agent']
+        },
+    }
+    NEUTRON_NSX_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
+
+    NEUTRON_N1KV_CONFIG_FILES = {
+        NEUTRON_CONF: {
+            'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
+                              NeutronGatewayContext(),
+                              context.WorkerConfigContext(),
+                              SyslogContext()],
+            'services': ['neutron-l3-agent',
+                         'neutron-dhcp-agent',
+                         'neutron-metadata-agent']
+        },
+        NEUTRON_L3_AGENT_CONF: {
+            'hook_contexts': [NetworkServiceContext(),
+                              L3AgentContext(),
+                              NeutronGatewayContext()],
+            'services': ['neutron-l3-agent']
+        },
+    }
+    NEUTRON_N1KV_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
+
+    __CONFIG_FILES = {
+        NSX: NEUTRON_NSX_CONFIG_FILES,
+        OVS: NEUTRON_OVS_CONFIG_FILES,
+        N1KV: NEUTRON_N1KV_CONFIG_FILES,
+        OVS_ODL: NEUTRON_OVS_ODL_CONFIG_FILES
+    }
+
+    return __CONFIG_FILES
+
 
 SERVICE_RENAMES = {
     'icehouse': {
@@ -626,7 +648,7 @@ def resolve_config_files(plugin, release):
     :returns: dict of configuration files, contexts
               and associated services
     '''
-    config_files = deepcopy(CONFIG_FILES)
+    config_files = deepcopy(get_config_files())
     drop_config = []
     cmp_os_release = CompareOpenStackReleases(release)
     if plugin == OVS:
@@ -647,7 +669,7 @@ def resolve_config_files(plugin, release):
         drop_config.extend([NEUTRON_LBAAS_AA_PROFILE_PATH])
 
     if disable_nova_metadata(cmp_os_release):
-        drop_config.extend(NOVA_CONFIG_FILES.keys())
+        drop_config.extend(get_nova_config_files().keys())
     else:
         if is_relation_made('amqp-nova'):
             amqp_nova_ctxt = context.AMQPContext(
@@ -880,7 +902,7 @@ def remove_legacy_nova_metadata():
     service_stop(service_name)
     service('disable', service_name)
     service('mask', service_name)
-    for f in NOVA_CONFIG_FILES.keys():
+    for f in get_nova_config_files().keys():
         remove_file(f)
 
 
@@ -1073,10 +1095,3 @@ def configure_apparmor():
         profiles.append(NEUTRON_LBAASV2_AA_PROFILE)
     for profile in profiles:
         context.AppArmorContext(profile).setup_aa_profile()
-
-
-def get_availability_zone():
-    use_juju_az = config('customize-failure-domain')
-    juju_az = os.environ.get('JUJU_AVAILABILITY_ZONE')
-    return (juju_az if use_juju_az and juju_az
-            else config('default-availability-zone'))

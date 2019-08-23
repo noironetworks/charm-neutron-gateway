@@ -1,4 +1,3 @@
-
 import io
 
 from contextlib import contextmanager
@@ -19,6 +18,7 @@ TO_PATCH = [
     'unit_get',
     'network_get_primary_address',
     'os_release',
+    'charmhelpers.contrib.network.ip.log',
 ]
 
 
@@ -157,12 +157,11 @@ class TestNeutronGatewayContext(CharmTestCase):
         self.maxDiff = None
 
     @patch.object(neutron_contexts, 'validate_nfg_log_path', lambda x: x)
-    @patch('neutron_utils.config')
     @patch('charmhelpers.contrib.openstack.context.relation_get')
     @patch('charmhelpers.contrib.openstack.context.related_units')
     @patch('charmhelpers.contrib.openstack.context.relation_ids')
     @patch.object(neutron_contexts, 'get_shared_secret')
-    def test_all(self, _secret, _rids, _runits, _rget, mock_config):
+    def test_all(self, _secret, _rids, _runits, _rget):
         rdata = {'l2-population': 'True',
                  'enable-dvr': 'True',
                  'overlay-network-type': 'gre',
@@ -186,12 +185,8 @@ class TestNeutronGatewayContext(CharmTestCase):
         self.test_config.set('firewall-group-log-rate-limit', 100)
         self.test_config.set('firewall-group-log-burst-limit', 50)
 
-        def config_side_effect(key):
-            return {
-                'customize-failure-domain': False,
-                'default-availability-zone': 'nova',
-            }[key]
-        mock_config.side_effect = config_side_effect
+        self.test_config.set('customize-failure-domain', False)
+        self.test_config.set('default-availability-zone', 'nova')
 
         self.network_get_primary_address.side_effect = NotImplementedError
         self.unit_get.return_value = '10.5.0.1'
@@ -237,13 +232,11 @@ class TestNeutronGatewayContext(CharmTestCase):
         })
 
     @patch.object(neutron_contexts, 'validate_nfg_log_path', lambda x: x)
-    @patch('neutron_utils.config')
     @patch('charmhelpers.contrib.openstack.context.relation_get')
     @patch('charmhelpers.contrib.openstack.context.related_units')
     @patch('charmhelpers.contrib.openstack.context.relation_ids')
     @patch.object(neutron_contexts, 'get_shared_secret')
-    def test_all_network_spaces(self, _secret, _rids, _runits, _rget,
-                                mock_config):
+    def test_all_network_spaces(self, _secret, _rids, _runits, _rget):
         rdata = {'l2-population': 'True',
                  'enable-dvr': 'True',
                  'overlay-network-type': 'gre',
@@ -261,12 +254,8 @@ class TestNeutronGatewayContext(CharmTestCase):
                              'physnet1:1000:2000 physnet2:2001:3000')
         self.test_config.set('flat-network-providers', 'physnet3 physnet4')
 
-        def config_side_effect(key):
-            return {
-                'customize-failure-domain': False,
-                'default-availability-zone': 'nova',
-            }[key]
-        mock_config.side_effect = config_side_effect
+        self.test_config.set('customize-failure-domain', False)
+        self.test_config.set('default-availability-zone', 'nova')
 
         self.network_get_primary_address.return_value = '192.168.20.2'
         self.unit_get.return_value = '10.5.0.1'
@@ -338,7 +327,6 @@ class TestNeutronGatewayContext(CharmTestCase):
         self.assertTrue(ctxt['enable_isolated_metadata'])
         self.assertTrue(ctxt['enable_metadata_network'])
 
-    @patch('neutron_utils.config')
     @patch('os.environ.get')
     @patch('charmhelpers.contrib.openstack.context.relation_get')
     @patch('charmhelpers.contrib.openstack.context.related_units')
@@ -346,8 +334,7 @@ class TestNeutronGatewayContext(CharmTestCase):
     @patch.object(neutron_contexts, 'get_shared_secret')
     def test_availability_zone_no_juju_with_env(self, _secret, _rids,
                                                 _runits, _rget,
-                                                mock_get,
-                                                mock_config):
+                                                mock_get):
         def environ_get_side_effect(key):
             return {
                 'JUJU_AVAILABILITY_ZONE': 'az1',
@@ -355,13 +342,9 @@ class TestNeutronGatewayContext(CharmTestCase):
             }[key]
         mock_get.side_effect = environ_get_side_effect
 
-        def config_side_effect(key):
-            return {
-                'customize-failure-domain': False,
-                'default-availability-zone': 'nova',
-            }[key]
+        self.test_config.set('customize-failure-domain', False)
+        self.test_config.set('default-availability-zone', 'nova')
 
-        mock_config.side_effect = config_side_effect
         context = neutron_contexts.NeutronGatewayContext()
         self.assertEqual(
             'nova', context()['availability_zone'])
@@ -593,3 +576,65 @@ class TestNovaMetadataContext(CharmTestCase):
                 'nova_metadata_port': '8775',
                 'nova_metadata_protocol': 'http',
                 'shared_secret': 'buuid'})
+
+
+class TestGetAvailabilityZone(CharmTestCase):
+
+    def setUp(self):
+        super(TestGetAvailabilityZone, self).setUp(neutron_contexts, TO_PATCH)
+
+    @patch.object(neutron_contexts.os.environ, 'get')
+    def test_get_az_customize_with_env(self, os_environ_get_mock):
+        self.config.side_effect = self.test_config.get
+        self.test_config.set('customize-failure-domain', True)
+        self.test_config.set('default-availability-zone', 'nova')
+
+        def os_environ_get_side_effect(key):
+            return {
+                'JUJU_AVAILABILITY_ZONE': 'az1',
+            }[key]
+        os_environ_get_mock.side_effect = os_environ_get_side_effect
+        az = neutron_contexts.get_availability_zone()
+        self.assertEqual('az1', az)
+
+    @patch.object(neutron_contexts.os.environ, 'get')
+    def test_get_az_customize_without_env(self, os_environ_get_mock):
+        self.config.side_effect = self.test_config.get
+        self.test_config.set('customize-failure-domain', True)
+        self.test_config.set('default-availability-zone', 'mynova')
+
+        def os_environ_get_side_effect(key):
+            return {
+                'JUJU_AVAILABILITY_ZONE': '',
+            }[key]
+        os_environ_get_mock.side_effect = os_environ_get_side_effect
+        az = neutron_contexts.get_availability_zone()
+        self.assertEqual('mynova', az)
+
+    @patch.object(neutron_contexts.os.environ, 'get')
+    def test_get_az_no_customize_without_env(self, os_environ_get_mock):
+        self.config.side_effect = self.test_config.get
+        self.test_config.set('customize-failure-domain', False)
+        self.test_config.set('default-availability-zone', 'nova')
+
+        def os_environ_get_side_effect(key):
+            return {
+                'JUJU_AVAILABILITY_ZONE': '',
+            }[key]
+        os_environ_get_mock.side_effect = os_environ_get_side_effect
+        az = neutron_contexts.get_availability_zone()
+        self.assertEqual('nova', az)
+
+    @patch.object(neutron_contexts.os.environ, 'get')
+    def test_get_az_no_customize_with_env(self, os_environ_get_mock):
+        self.config.side_effect = self.test_config.get
+        self.test_config.set('customize-failure-domain', False)
+        self.test_config.set('default-availability-zone', 'nova')
+
+        def os_environ_get_side_effect(key):
+            return {
+                'JUJU_AVAILABILITY_ZONE': 'az1',
+            }[key]
+        os_environ_get_mock.side_effect = os_environ_get_side_effect
+        az = neutron_contexts.get_availability_zone()
+        self.assertEqual('nova', az)
