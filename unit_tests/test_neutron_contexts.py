@@ -59,6 +59,7 @@ class TestL3AgentContext(CharmTestCase):
 
     @patch('neutron_contexts.NeutronAPIContext')
     def test_new_ext_network(self, _NeutronAPIContext):
+        self.os_release.return_value = 'stein'
         _NeutronAPIContext.return_value = \
             DummyNeutronAPIContext(return_value={'enable_dvr': False,
                                                  'report_interval': 30,
@@ -75,10 +76,13 @@ class TestL3AgentContext(CharmTestCase):
                           'use_l3ha': True,
                           'external_configuration_new': True,
                           'handle_internal_only_router': False,
-                          'plugin': 'ovs'})
+                          'plugin': 'ovs',
+                          'l3_extension_plugins': 'fwaas_v2',
+                          })
 
     @patch('neutron_contexts.NeutronAPIContext')
     def test_old_ext_network(self, _NeutronAPIContext):
+        self.os_release.return_value = 'rocky'
         _NeutronAPIContext.return_value = \
             DummyNeutronAPIContext(return_value={'enable_dvr': False,
                                                  'report_interval': 30,
@@ -94,15 +98,19 @@ class TestL3AgentContext(CharmTestCase):
                           'rpc_response_timeout': 60,
                           'use_l3ha': True,
                           'handle_internal_only_router': False,
-                          'plugin': 'ovs'})
+                          'plugin': 'ovs',
+                          'l3_extension_plugins': '',
+                          })
 
     @patch('neutron_contexts.NeutronAPIContext')
     def test_hior_leader(self, _NeutronAPIContext):
+        self.os_release.return_value = 'rocky'
         _NeutronAPIContext.return_value = \
             DummyNeutronAPIContext(return_value={'enable_dvr': False,
                                                  'report_interval': 30,
                                                  'rpc_response_timeout': 60,
                                                  'enable_l3ha': True,
+                                                 'l3_extension_plugins': '',
                                                  })
         self.test_config.set('run-internal-router', 'leader')
         self.test_config.set('external-network-id', 'netid')
@@ -114,10 +122,13 @@ class TestL3AgentContext(CharmTestCase):
                           'use_l3ha': True,
                           'handle_internal_only_router': True,
                           'ext_net_id': 'netid',
-                          'plugin': 'ovs'})
+                          'plugin': 'ovs',
+                          'l3_extension_plugins': '',
+                          })
 
     @patch('neutron_contexts.NeutronAPIContext')
     def test_hior_all(self, _NeutronAPIContext):
+        self.os_release.return_value = 'rocky'
         _NeutronAPIContext.return_value = \
             DummyNeutronAPIContext(return_value={'enable_dvr': False,
                                                  'report_interval': 30,
@@ -134,10 +145,13 @@ class TestL3AgentContext(CharmTestCase):
                           'use_l3ha': True,
                           'handle_internal_only_router': True,
                           'ext_net_id': 'netid',
-                          'plugin': 'ovs'})
+                          'plugin': 'ovs',
+                          'l3_extension_plugins': '',
+                          })
 
     @patch('neutron_contexts.NeutronAPIContext')
     def test_dvr(self, _NeutronAPIContext):
+        self.os_release.return_value = 'rocky'
         _NeutronAPIContext.return_value = \
             DummyNeutronAPIContext(return_value={'enable_dvr': True,
                                                  'report_interval': 30,
@@ -305,6 +319,7 @@ class TestNeutronGatewayContext(CharmTestCase):
     @patch('charmhelpers.contrib.openstack.context.relation_ids')
     @patch.object(neutron_contexts, 'get_shared_secret')
     def test_dhcp_settings(self, _secret, _rids, _runits, _rget):
+        self.os_release.return_value = 'icehouse'
         self.test_config.set('enable-isolated-metadata', True)
         self.test_config.set('enable-metadata-network', True)
         self.network_get_primary_address.return_value = '192.168.20.2'
@@ -318,6 +333,7 @@ class TestNeutronGatewayContext(CharmTestCase):
     @patch('charmhelpers.contrib.openstack.context.relation_ids')
     @patch.object(neutron_contexts, 'get_shared_secret')
     def test_dhcp_setting_plug_override(self, _secret, _rids, _runits, _rget):
+        self.os_release.return_value = 'icehouse'
         self.test_config.set('plugin', 'nsx')
         self.test_config.set('enable-isolated-metadata', False)
         self.test_config.set('enable-metadata-network', False)
@@ -335,6 +351,8 @@ class TestNeutronGatewayContext(CharmTestCase):
     def test_availability_zone_no_juju_with_env(self, _secret, _rids,
                                                 _runits, _rget,
                                                 mock_get):
+        self.os_release.return_value = 'icehouse'
+
         def environ_get_side_effect(key):
             return {
                 'JUJU_AVAILABILITY_ZONE': 'az1',
@@ -358,6 +376,8 @@ class TestNeutronGatewayContext(CharmTestCase):
     def test_availability_zone_no_juju_no_env(self, _secret, _rids,
                                               _runits, _rget,
                                               mock_get, mock_config):
+        self.os_release.return_value = 'icehouse'
+
         def environ_get_side_effect(key):
             return {
                 'JUJU_AVAILABILITY_ZONE': '',
@@ -386,6 +406,8 @@ class TestNeutronGatewayContext(CharmTestCase):
     def test_availability_zone_juju(self, _secret, _rids,
                                     _runits, _rget,
                                     mock_get, mock_config):
+        self.os_release.return_value = 'icehouse'
+
         def environ_get_side_effect(key):
             return {
                 'JUJU_AVAILABILITY_ZONE': 'az1',
@@ -404,6 +426,7 @@ class TestNeutronGatewayContext(CharmTestCase):
     @patch('charmhelpers.contrib.openstack.context.relation_ids')
     @patch.object(neutron_contexts, 'get_shared_secret')
     def test_nfg_min_settings(self, _secret, _rids, _runits, _rget):
+        self.os_release.return_value = 'icehouse'
         self.test_config.set('firewall-group-log-rate-limit', 90)
         self.test_config.set('firewall-group-log-burst-limit', 20)
         self.network_get_primary_address.return_value = '192.168.20.2'

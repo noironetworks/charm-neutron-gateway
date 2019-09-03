@@ -110,6 +110,21 @@ class L3AgentContext(OSContextGenerator):
         ctxt['rpc_response_timeout'] = api_settings['rpc_response_timeout']
         ctxt['report_interval'] = api_settings['report_interval']
         ctxt['use_l3ha'] = api_settings['enable_l3ha']
+
+        cmp_os_release = CompareOpenStackReleases(os_release('neutron-common'))
+
+        l3_extension_plugins = api_settings.get('l3_extension_plugins', [])
+        # per Change-Id If1b332eb0f581e9acba111f79ba578a0b7081dd2
+        # only enable it for stein although fwaasv2 was added in Queens
+        is_stein = cmp_os_release >= 'stein'
+        if is_stein:
+            l3_extension_plugins.append('fwaas_v2')
+
+        if (is_stein and api_settings.get('enable_nfg_logging')):
+            l3_extension_plugins.append('fwaas_v2_log')
+
+        ctxt['l3_extension_plugins'] = ','.join(l3_extension_plugins)
+
         return ctxt
 
 
