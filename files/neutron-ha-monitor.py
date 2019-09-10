@@ -91,7 +91,7 @@ class Daemon(object):
 class MonitorNeutronAgentsDaemon(Daemon):
     def __init__(self):
         super(MonitorNeutronAgentsDaemon, self).__init__()
-        logging.setup('Neuron-HA-Monitor')
+        logging.setup('Neutron-HA-Monitor')
         LOG.info('Monitor Neutron Agent Loop Init')
         self.hostname = None
         self.env = {}
@@ -431,6 +431,6 @@ if __name__ == '__main__':
 
     cfg.CONF.register_cli_opts(opts)
     cfg.CONF(project='monitor_neutron_agents', default_config_files=[])
-    logging.setup('Neuron-HA-Monitor')
+    logging.setup('Neutron-HA-Monitor')
     monitor_daemon = MonitorNeutronAgentsDaemon()
     monitor_daemon.start()
