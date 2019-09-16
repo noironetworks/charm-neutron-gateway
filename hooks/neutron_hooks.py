@@ -9,6 +9,7 @@ from charmhelpers.core.hookenv import (
     relation_set,
     relation_ids,
     Hooks,
+    unit_get,
     UnregisteredHookError,
     status_set,
 )
@@ -31,6 +32,7 @@ from charmhelpers.contrib.hahelpers.apache import(
 )
 from charmhelpers.contrib.openstack.utils import (
     configure_installation_source,
+    get_host_ip,
     openstack_upgrade_available,
     pausable_restart_on_change as restart_on_change,
     is_unit_paused_set,
@@ -44,6 +46,9 @@ from charmhelpers.contrib.charmsupport import nrpe
 from charmhelpers.contrib.hardening.harden import harden
 
 import sys
+
+from neutron_contexts import get_shared_secret
+
 from neutron_utils import (
     L3HA_PACKAGES,
     register_configs,
@@ -335,6 +340,14 @@ def ha_relation_destroyed():
     if config('ha-legacy-mode'):
         stop_neutron_ha_monitor_daemon()
         remove_legacy_ha_files()
+
+@hooks.hook('quantum-network-service-relation-joined')
+def qns_joined(relation_id=None):
+    settings = {}
+    settings['metadata_shared_secret'] = get_shared_secret()
+    settings['metadata_ip'] = get_host_ip(unit_get('private-address'))
+
+    relation_set(relation_id=relation_id, **settings)
 
 
 @hooks.hook('update-status')

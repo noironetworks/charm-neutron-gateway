@@ -36,6 +36,8 @@ requires:
     interface: rabbitmq
   neutron-plugin-api:
     interface: neutron-plugin-api
+  aci-opflex:
+    interface: aci-opflex
   ha:
     interface: hacluster
     scope: container
