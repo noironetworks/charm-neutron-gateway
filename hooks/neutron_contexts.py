@@ -2,18 +2,20 @@
 import os
 import uuid
 from charmhelpers.core.hookenv import (
-    log, ERROR,
     config,
     relation_get,
     relation_ids,
     related_units,
     unit_get,
     network_get_primary_address,
+    log,
 )
 from charmhelpers.contrib.openstack.context import (
     OSContextGenerator,
     NeutronAPIContext,
     config_flags_parser,
+    NovaVendorMetadataContext,
+    NovaVendorMetadataJSONContext,
 )
 from charmhelpers.contrib.openstack.utils import (
     os_release,
@@ -51,10 +53,15 @@ CORE_PLUGIN = {
     ACI: NEUTRON_ACI_PLUGIN,
 }
 
+NFG_LOG_RATE_LIMIT_MIN = 100
+NFG_LOG_BURST_LIMIT_MIN = 25
 
-def _get_availability_zone():
-    from neutron_utils import get_availability_zone as get_az
-    return get_az()
+
+def get_availability_zone():
+    use_juju_az = config('customize-failure-domain')
+    juju_az = os.environ.get('JUJU_AVAILABILITY_ZONE')
+    return (juju_az if use_juju_az and juju_az
+            else config('default-availability-zone'))
 
 
 def core_plugin():
@@ -105,7 +112,35 @@ class L3AgentContext(OSContextGenerator):
             ctxt['agent_mode'] = 'legacy'
         ctxt['rpc_response_timeout'] = api_settings['rpc_response_timeout']
         ctxt['report_interval'] = api_settings['report_interval']
+        ctxt['use_l3ha'] = api_settings['enable_l3ha']
         return ctxt
+
+
+def validate_nfg_log_path(desired_nfg_log_path):
+    if not desired_nfg_log_path:
+        # None means "we need to use syslog" - no need
+        # to check anything on filesystem
+        return None
+
+    dst_dir, _ = os.path.split(desired_nfg_log_path)
+    path_exists = os.path.exists(dst_dir)
+    if not path_exists:
+        log(
+            "Desired NFG log directory {} not exists! "
+            "falling back to syslog".format(dst_dir),
+            "WARN"
+        )
+        return None
+
+    if path_exists and os.path.isdir(desired_nfg_log_path):
+        log(
+            "Desired NFG log path {} should be file, not directory! "
+            "falling back to syslog".format(desired_nfg_log_path),
+            "WARN"
+        )
+        return None
+
+    return desired_nfg_log_path
 
 
 class NeutronGatewayContext(NeutronAPIContext):
@@ -131,7 +166,8 @@ class NeutronGatewayContext(NeutronAPIContext):
             'report_interval': api_settings['report_interval'],
             'enable_metadata_network': config('enable-metadata-network'),
             'enable_isolated_metadata': config('enable-isolated-metadata'),
-            'availability_zone': _get_availability_zone(),
+            'availability_zone': get_availability_zone(),
+            'enable_nfg_logging': api_settings['enable_nfg_logging'],
         }
 
         ctxt['local_ip'] = get_local_ip()
@@ -162,35 +198,41 @@ class NeutronGatewayContext(NeutronAPIContext):
             ctxt['enable_metadata_network'] = True
             ctxt['enable_isolated_metadata'] = True
 
+        ctxt['nfg_log_output_base'] = validate_nfg_log_path(
+            config('firewall-group-log-output-base')
+        )
+        ctxt['nfg_log_rate_limit'] = config(
+            'firewall-group-log-rate-limit'
+        )
+        if ctxt['nfg_log_rate_limit'] is not None:
+            ctxt['nfg_log_rate_limit'] = max(
+                ctxt['nfg_log_rate_limit'],
+                NFG_LOG_RATE_LIMIT_MIN
+            )
+        ctxt['nfg_log_burst_limit'] = config(
+            'firewall-group-log-burst-limit'
+        )
+        if ctxt['nfg_log_burst_limit'] is not None:
+            ctxt['nfg_log_burst_limit'] = max(
+                ctxt['nfg_log_burst_limit'],
+                NFG_LOG_BURST_LIMIT_MIN
+            )
+
         return ctxt
 
 
-class NovaMetadataContext(OSContextGenerator):
+class NovaMetadataContext(NovaVendorMetadataContext):
 
     def __init__(self, rel_name='quantum-network-service'):
+        super(NovaMetadataContext, self).__init__('neutron-common', [rel_name])
         self.rel_name = rel_name
-        self.interfaces = [rel_name]
 
     def __call__(self):
         ctxt = {}
         cmp_os_release = CompareOpenStackReleases(os_release('neutron-common'))
         if cmp_os_release < 'rocky':
-            vdata_providers = []
-            vdata = config('vendor-data')
-            vdata_url = config('vendor-data-url')
-
-            if vdata:
-                ctxt['vendor_data'] = True
-                vdata_providers.append('StaticJSON')
-
-            if vdata_url:
-                if cmp_os_release > 'mitaka':
-                    ctxt['vendor_data_url'] = vdata_url
-                    vdata_providers.append('DynamicJSON')
-                else:
-                    log('Dynamic vendor data unsupported'
-                        ' for {}.'.format(cmp_os_release), level=ERROR)
-            ctxt['vendordata_providers'] = ','.join(vdata_providers)
+            # if release is Rocky or later, we don't set vendor metadata here
+            ctxt.update(super(NovaMetadataContext, self).__call__())
         for rid in relation_ids(self.rel_name):
             for unit in related_units(rid):
                 rdata = relation_get(rid=rid, unit=unit)
@@ -207,6 +249,20 @@ class NovaMetadataContext(OSContextGenerator):
             ctxt['nova_metadata_port'] = '8775'
             ctxt['nova_metadata_protocol'] = 'http'
         return ctxt
+
+
+class NovaMetadataJSONContext(NovaVendorMetadataJSONContext):
+
+    def __call__(self):
+        vdata_values = super(NovaMetadataJSONContext, self).__call__()
+
+        cmp_os_release = CompareOpenStackReleases(os_release('neutron-common'))
+
+        if cmp_os_release < 'rocky':
+            return vdata_values
+        else:
+            # if release is Rocky or later, we don't set vendor metadata here
+            return {'vendor_data_json': '{}'}
 
 
 SHARED_SECRET = "/etc/{}/secret.txt"

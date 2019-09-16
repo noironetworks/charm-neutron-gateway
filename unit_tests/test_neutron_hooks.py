@@ -8,15 +8,9 @@ sys.modules['apt'] = MagicMock()
 sys.modules['apt_pkg'] = MagicMock()
 
 import charmhelpers.core.hookenv as hookenv
-with patch('charmhelpers.core.hookenv.config'):
-    with patch('neutron_utils.restart_map'):
-        with patch('neutron_utils.register_configs'):
-            with patch('charmhelpers.contrib.'
-                       'hardening.harden.harden') as mock_dec:
-                mock_dec.side_effect = (lambda *dargs, **dkwargs: lambda f:
-                                        lambda *args, **kwargs:
-                                        f(*args, **kwargs))
-                import neutron_hooks as hooks
+import charmhelpers.contrib.hardening.harden as harden
+
+import neutron_hooks as hooks
 
 from test_utils import CharmTestCase
 
@@ -56,13 +50,14 @@ TO_PATCH = [
     'use_l3ha',
     'kv',
     'service_restart',
-    'is_unit_paused_set',
     'install_systemd_override',
     'configure_apparmor',
     'disable_nova_metadata',
     'remove_legacy_nova_metadata',
     'services',
     'remove_old_packages',
+    'is_container',
+    'charmhelpers.contrib.openstack.utils.is_unit_paused_set',
 ]
 
 
@@ -76,8 +71,11 @@ class TestQuantumHooks(CharmTestCase):
         self.lsb_release.return_value = {'DISTRIB_CODENAME': 'precise'}
         # passthrough
         self.b64decode.side_effect = lambda arg: arg
+        self.is_container.return_value = False
         hookenv.config.side_effect = self.test_config.get
         hooks.hooks._config_save = False
+        harden._DISABLE_HARDENING_FOR_UNIT_TEST = True
+        self.is_unit_paused_set.return_value = True
 
     def _call_hook(self, hookname):
         hooks.hooks.execute([
@@ -137,6 +135,28 @@ class TestQuantumHooks(CharmTestCase):
         self.create_sysctl.assert_called_with(
             '{foo : bar}',
             '/etc/sysctl.d/50-quantum-gateway.conf')
+
+    def test_config_changed_in_container(self):
+        self.disable_nova_metadata.return_value = False
+
+        def mock_relids(rel):
+            return ['relid']
+        self.test_config.set(
+            'sysctl',
+            '{foo : bar}'
+        )
+        self.openstack_upgrade_available.return_value = True
+        self.valid_plugin.return_value = True
+        self.relation_ids.side_effect = mock_relids
+        self.is_container.return_value = True
+        _amqp_joined = self.patch('amqp_joined')
+        _amqp_nova_joined = self.patch('amqp_nova_joined')
+        self._call_hook('config-changed')
+        self.assertTrue(self.do_openstack_upgrade.called)
+        self.assertTrue(self.configure_ovs.called)
+        self.assertTrue(_amqp_joined.called)
+        self.assertTrue(_amqp_nova_joined.called)
+        self.create_sysctl.assert_not_called()
 
     def test_config_changed_upgrade(self):
         self.disable_nova_metadata.return_value = False
@@ -240,9 +260,23 @@ class TestQuantumHooks(CharmTestCase):
         self.assertTrue(self.CONFIGS.write_all.called)
         self.install_ca_cert.assert_called_with('cert')
 
-    def test_nm_changed_restart_nonce(self):
+    @patch("neutron_utils.get_packages")
+    @patch("neutron_utils.resolve_config_files")
+    @patch("neutron_utils.config")
+    @patch("neutron_utils.os_release")
+    def test_nm_changed_restart_nonce(self,
+                                      mock_os_release,
+                                      mock_config,
+                                      mock_resolve_config_files,
+                                      mock_get_packages):
         '''Ensure first set of restart_trigger restarts nova-api-metadata'''
         self.disable_nova_metadata.return_value = False
+        # as restart_map is embedded into the decorator, we have to mock out
+        # the bits in the restart_map to be able to make it pass.
+        mock_os_release.return_value = 'mitaka'
+        mock_config.return_value = 'ovs'
+        mock_resolve_config_files.return_value = {'ovs': {}}
+        mock_get_packages.return_value = []
 
         def _relation_get(key):
             data = {
@@ -264,9 +298,23 @@ class TestQuantumHooks(CharmTestCase):
                                        '1111111222222333333')
         self.assertTrue(kv_mock.flush.called)
 
-    def test_nm_changed_restart_nonce_changed(self):
+    @patch("neutron_utils.get_packages")
+    @patch("neutron_utils.resolve_config_files")
+    @patch("neutron_utils.config")
+    @patch("neutron_utils.os_release")
+    def test_nm_changed_restart_nonce_changed(self,
+                                              mock_os_release,
+                                              mock_config,
+                                              mock_resolve_config_files,
+                                              mock_get_packages):
         '''Ensure change of restart_trigger restarts nova-api-metadata'''
         self.disable_nova_metadata.return_value = False
+        # as restart_map is embedded into the decorator, we have to mock out
+        # the bits in the restart_map to be able to make it pass.
+        mock_os_release.return_value = 'mitaka'
+        mock_config.return_value = 'ovs'
+        mock_resolve_config_files.return_value = {'ovs': {}}
+        mock_get_packages.return_value = []
 
         def _relation_get(key):
             data = {
@@ -288,10 +336,24 @@ class TestQuantumHooks(CharmTestCase):
                                        '1111111222222333333')
         self.assertTrue(kv_mock.flush.called)
 
-    def test_nm_changed_restart_nonce_nochange(self):
+    @patch("neutron_utils.get_packages")
+    @patch("neutron_utils.resolve_config_files")
+    @patch("neutron_utils.config")
+    @patch("neutron_utils.os_release")
+    def test_nm_changed_restart_nonce_nochange(self,
+                                               mock_os_release,
+                                               mock_config,
+                                               mock_resolve_config_files,
+                                               mock_get_packages):
         '''Ensure no change in restart_trigger skips restarts'''
         self.patch_object(hooks, 'disable_nova_metadata',
                           return_value=False)
+        # as restart_map is embedded into the decorator, we have to mock out
+        # the bits in the restart_map to be able to make it pass.
+        mock_os_release.return_value = 'mitaka'
+        mock_config.return_value = 'ovs'
+        mock_resolve_config_files.return_value = {'ovs': {}}
+        mock_get_packages.return_value = []
 
         def _relation_get(key):
             data = {

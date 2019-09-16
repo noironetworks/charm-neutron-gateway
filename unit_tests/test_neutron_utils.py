@@ -11,10 +11,6 @@ from test_utils import (
     CharmTestCase
 )
 
-from test_neutron_contexts import (
-    patch_open
-)
-
 TO_PATCH = [
     'config',
     'get_os_codename_install_source',
@@ -258,8 +254,10 @@ class TestNeutronUtils(CharmTestCase):
         ])
         self.add_bridge_port.assert_called_with('br-ex', 'eth0')
 
+    @patch('charmhelpers.contrib.openstack.context.list_nics',
+           return_value=['eth0', 'eth0.100', 'eth0.200'])
     @patch('charmhelpers.contrib.openstack.context.config')
-    def test_configure_ovs_ovs_data_port(self, mock_config):
+    def test_configure_ovs_ovs_data_port(self, mock_config, _nics):
         self.is_linuxbridge_interface.return_value = False
         mock_config.side_effect = self.test_config.get
         self.config.side_effect = self.test_config.get
@@ -306,8 +304,10 @@ class TestNeutronUtils(CharmTestCase):
                  call('br1', 'eth0.200', promisc=True)]
         self.add_bridge_port.assert_has_calls(calls, any_order=True)
 
+    @patch('charmhelpers.contrib.openstack.context.list_nics',
+           return_value=['br-eth0'])
     @patch('charmhelpers.contrib.openstack.context.config')
-    def test_configure_ovs_ovs_data_port_bridge(self, mock_config):
+    def test_configure_ovs_ovs_data_port_bridge(self, mock_config, _nics):
         self.is_linuxbridge_interface.return_value = True
         mock_config.side_effect = self.test_config.get
         self.config.side_effect = self.test_config.get
@@ -850,87 +850,6 @@ class TestNeutronUtils(CharmTestCase):
                       neutron_utils.NEUTRON_LBAAS_AA_PROFILE_PATH]
         for config in EXC_CONFIG:
             self.assertTrue(config not in actual_configs)
-
-    def test_write_valid_json_vendordata(self):
-        _jdata = '{"good": "json"}'
-        _tdata = '{\n  "good": "json"\n}'
-        with patch_open() as (_open, _file):
-            self.assertEqual(neutron_utils.write_vendordata(_jdata), True)
-            _open.assert_called_with(neutron_utils.VENDORDATA_FILE, 'w')
-            _file.write.assert_called_with(_tdata)
-
-    @patch('json.loads')
-    def test_write_invalid_json_vendordata(self, _json_loads):
-        _jdata = '{ bad json }'
-        _json_loads.side_effect = TypeError
-        with patch_open() as (_open, _file):
-            self.assertEqual(neutron_utils.write_vendordata(_jdata), False)
-
-    @patch.object(neutron_utils.os.environ, 'get')
-    def test_get_az_customize_with_env(self, os_environ_get_mock):
-        self.config.side_effect = self.test_config.get
-        self.test_config.set('customize-failure-domain', True)
-        self.test_config.set('default-availability-zone', 'nova')
-
-        def os_environ_get_side_effect(key):
-            return {
-                'JUJU_AVAILABILITY_ZONE': 'az1',
-            }[key]
-        os_environ_get_mock.side_effect = os_environ_get_side_effect
-        az = neutron_utils.get_availability_zone()
-        self.assertEqual('az1', az)
-
-    @patch.object(neutron_utils.os.environ, 'get')
-    def test_get_az_customize_without_env(self, os_environ_get_mock):
-        self.config.side_effect = self.test_config.get
-        self.test_config.set('customize-failure-domain', True)
-        self.test_config.set('default-availability-zone', 'mynova')
-
-        def os_environ_get_side_effect(key):
-            return {
-                'JUJU_AVAILABILITY_ZONE': '',
-            }[key]
-        os_environ_get_mock.side_effect = os_environ_get_side_effect
-        az = neutron_utils.get_availability_zone()
-        self.assertEqual('mynova', az)
-
-    @patch.object(neutron_utils.os.environ, 'get')
-    def test_get_az_no_customize_without_env(self, os_environ_get_mock):
-        self.config.side_effect = self.test_config.get
-        self.test_config.set('customize-failure-domain', False)
-        self.test_config.set('default-availability-zone', 'nova')
-
-        def os_environ_get_side_effect(key):
-            return {
-                'JUJU_AVAILABILITY_ZONE': '',
-            }[key]
-        os_environ_get_mock.side_effect = os_environ_get_side_effect
-        az = neutron_utils.get_availability_zone()
-        self.assertEqual('nova', az)
-
-    @patch.object(neutron_utils.os.environ, 'get')
-    def test_get_az_no_customize_with_env(self, os_environ_get_mock):
-        self.config.side_effect = self.test_config.get
-        self.test_config.set('customize-failure-domain', False)
-        self.test_config.set('default-availability-zone', 'nova')
-
-        def os_environ_get_side_effect(key):
-            return {
-                'JUJU_AVAILABILITY_ZONE': 'az1',
-            }[key]
-        os_environ_get_mock.side_effect = os_environ_get_side_effect
-        az = neutron_utils.get_availability_zone()
-        self.assertEqual('nova', az)
-
-network_context = {
-    'service_username': 'foo',
-    'service_password': 'bar',
-    'service_tenant': 'baz',
-    'region': 'foo-bar',
-    'keystone_host': 'keystone',
-    'auth_port': 5000,
-    'auth_protocol': 'https'
-}
 
 
 class DummyNetworkServiceContext():

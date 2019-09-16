@@ -1,4 +1,3 @@
-
 import io
 
 from contextlib import contextmanager
@@ -19,6 +18,7 @@ TO_PATCH = [
     'unit_get',
     'network_get_primary_address',
     'os_release',
+    'charmhelpers.contrib.network.ip.log',
 ]
 
 
@@ -63,6 +63,7 @@ class TestL3AgentContext(CharmTestCase):
             DummyNeutronAPIContext(return_value={'enable_dvr': False,
                                                  'report_interval': 30,
                                                  'rpc_response_timeout': 60,
+                                                 'enable_l3ha': True,
                                                  })
         self.test_config.set('run-internal-router', 'none')
         self.test_config.set('external-network-id', '')
@@ -71,6 +72,7 @@ class TestL3AgentContext(CharmTestCase):
                          {'agent_mode': 'legacy',
                           'report_interval': 30,
                           'rpc_response_timeout': 60,
+                          'use_l3ha': True,
                           'external_configuration_new': True,
                           'handle_internal_only_router': False,
                           'plugin': 'ovs'})
@@ -81,6 +83,7 @@ class TestL3AgentContext(CharmTestCase):
             DummyNeutronAPIContext(return_value={'enable_dvr': False,
                                                  'report_interval': 30,
                                                  'rpc_response_timeout': 60,
+                                                 'enable_l3ha': True,
                                                  })
         self.test_config.set('run-internal-router', 'none')
         self.test_config.set('ext-port', 'eth1')
@@ -89,6 +92,7 @@ class TestL3AgentContext(CharmTestCase):
                          {'agent_mode': 'legacy',
                           'report_interval': 30,
                           'rpc_response_timeout': 60,
+                          'use_l3ha': True,
                           'handle_internal_only_router': False,
                           'plugin': 'ovs'})
 
@@ -98,6 +102,7 @@ class TestL3AgentContext(CharmTestCase):
             DummyNeutronAPIContext(return_value={'enable_dvr': False,
                                                  'report_interval': 30,
                                                  'rpc_response_timeout': 60,
+                                                 'enable_l3ha': True,
                                                  })
         self.test_config.set('run-internal-router', 'leader')
         self.test_config.set('external-network-id', 'netid')
@@ -106,6 +111,7 @@ class TestL3AgentContext(CharmTestCase):
                          {'agent_mode': 'legacy',
                           'report_interval': 30,
                           'rpc_response_timeout': 60,
+                          'use_l3ha': True,
                           'handle_internal_only_router': True,
                           'ext_net_id': 'netid',
                           'plugin': 'ovs'})
@@ -116,6 +122,7 @@ class TestL3AgentContext(CharmTestCase):
             DummyNeutronAPIContext(return_value={'enable_dvr': False,
                                                  'report_interval': 30,
                                                  'rpc_response_timeout': 60,
+                                                 'enable_l3ha': True,
                                                  })
         self.test_config.set('run-internal-router', 'all')
         self.test_config.set('external-network-id', 'netid')
@@ -124,6 +131,7 @@ class TestL3AgentContext(CharmTestCase):
                          {'agent_mode': 'legacy',
                           'report_interval': 30,
                           'rpc_response_timeout': 60,
+                          'use_l3ha': True,
                           'handle_internal_only_router': True,
                           'ext_net_id': 'netid',
                           'plugin': 'ovs'})
@@ -134,6 +142,7 @@ class TestL3AgentContext(CharmTestCase):
             DummyNeutronAPIContext(return_value={'enable_dvr': True,
                                                  'report_interval': 30,
                                                  'rpc_response_timeout': 60,
+                                                 'enable_l3ha': True,
                                                  })
         self.assertEqual(neutron_contexts.L3AgentContext()()['agent_mode'],
                          'dvr_snat')
@@ -147,19 +156,20 @@ class TestNeutronGatewayContext(CharmTestCase):
         self.config.side_effect = self.test_config.get
         self.maxDiff = None
 
-    @patch('neutron_utils.config')
+    @patch.object(neutron_contexts, 'validate_nfg_log_path', lambda x: x)
     @patch('charmhelpers.contrib.openstack.context.relation_get')
     @patch('charmhelpers.contrib.openstack.context.related_units')
     @patch('charmhelpers.contrib.openstack.context.relation_ids')
     @patch.object(neutron_contexts, 'get_shared_secret')
-    def test_all(self, _secret, _rids, _runits, _rget, mock_config):
+    def test_all(self, _secret, _rids, _runits, _rget):
         rdata = {'l2-population': 'True',
                  'enable-dvr': 'True',
                  'overlay-network-type': 'gre',
                  'enable-l3ha': 'True',
                  'enable-qos': 'True',
                  'network-device-mtu': 9000,
-                 'dns-domain': 'openstack.example.'}
+                 'dns-domain': 'openstack.example.',
+                 'enable-nfg-logging': 'True'}
         self.test_config.set('plugin', 'ovs')
         self.test_config.set('debug', False)
         self.test_config.set('verbose', True)
@@ -170,13 +180,13 @@ class TestNeutronGatewayContext(CharmTestCase):
         self.test_config.set('vlan-ranges',
                              'physnet1:1000:2000 physnet2:2001:3000')
         self.test_config.set('flat-network-providers', 'physnet3 physnet4')
+        self.test_config.set('firewall-group-log-output-base',
+                             '/var/log/firewall-logs')
+        self.test_config.set('firewall-group-log-rate-limit', 100)
+        self.test_config.set('firewall-group-log-burst-limit', 50)
 
-        def config_side_effect(key):
-            return {
-                'customize-failure-domain': False,
-                'default-availability-zone': 'nova',
-            }[key]
-        mock_config.side_effect = config_side_effect
+        self.test_config.set('customize-failure-domain', False)
+        self.test_config.set('default-availability-zone', 'nova')
 
         self.network_get_primary_address.side_effect = NotImplementedError
         self.unit_get.return_value = '10.5.0.1'
@@ -215,15 +225,18 @@ class TestNeutronGatewayContext(CharmTestCase):
                 'dhcp-match': 'set:ipxe,175'
             },
             'availability_zone': 'nova',
+            'enable_nfg_logging': True,
+            'nfg_log_burst_limit': 50,
+            'nfg_log_output_base': '/var/log/firewall-logs',
+            'nfg_log_rate_limit': 100,
         })
 
-    @patch('neutron_utils.config')
+    @patch.object(neutron_contexts, 'validate_nfg_log_path', lambda x: x)
     @patch('charmhelpers.contrib.openstack.context.relation_get')
     @patch('charmhelpers.contrib.openstack.context.related_units')
     @patch('charmhelpers.contrib.openstack.context.relation_ids')
     @patch.object(neutron_contexts, 'get_shared_secret')
-    def test_all_network_spaces(self, _secret, _rids, _runits, _rget,
-                                mock_config):
+    def test_all_network_spaces(self, _secret, _rids, _runits, _rget):
         rdata = {'l2-population': 'True',
                  'enable-dvr': 'True',
                  'overlay-network-type': 'gre',
@@ -241,12 +254,8 @@ class TestNeutronGatewayContext(CharmTestCase):
                              'physnet1:1000:2000 physnet2:2001:3000')
         self.test_config.set('flat-network-providers', 'physnet3 physnet4')
 
-        def config_side_effect(key):
-            return {
-                'customize-failure-domain': False,
-                'default-availability-zone': 'nova',
-            }[key]
-        mock_config.side_effect = config_side_effect
+        self.test_config.set('customize-failure-domain', False)
+        self.test_config.set('default-availability-zone', 'nova')
 
         self.network_get_primary_address.return_value = '192.168.20.2'
         self.unit_get.return_value = '10.5.0.1'
@@ -285,6 +294,10 @@ class TestNeutronGatewayContext(CharmTestCase):
                 'dhcp-match': 'set:ipxe,175'
             },
             'availability_zone': 'nova',
+            'enable_nfg_logging': False,
+            'nfg_log_burst_limit': 25,
+            'nfg_log_output_base': None,
+            'nfg_log_rate_limit': None,
         })
 
     @patch('charmhelpers.contrib.openstack.context.relation_get')
@@ -314,7 +327,6 @@ class TestNeutronGatewayContext(CharmTestCase):
         self.assertTrue(ctxt['enable_isolated_metadata'])
         self.assertTrue(ctxt['enable_metadata_network'])
 
-    @patch('neutron_utils.config')
     @patch('os.environ.get')
     @patch('charmhelpers.contrib.openstack.context.relation_get')
     @patch('charmhelpers.contrib.openstack.context.related_units')
@@ -322,8 +334,7 @@ class TestNeutronGatewayContext(CharmTestCase):
     @patch.object(neutron_contexts, 'get_shared_secret')
     def test_availability_zone_no_juju_with_env(self, _secret, _rids,
                                                 _runits, _rget,
-                                                mock_get,
-                                                mock_config):
+                                                mock_get):
         def environ_get_side_effect(key):
             return {
                 'JUJU_AVAILABILITY_ZONE': 'az1',
@@ -331,13 +342,9 @@ class TestNeutronGatewayContext(CharmTestCase):
             }[key]
         mock_get.side_effect = environ_get_side_effect
 
-        def config_side_effect(key):
-            return {
-                'customize-failure-domain': False,
-                'default-availability-zone': 'nova',
-            }[key]
+        self.test_config.set('customize-failure-domain', False)
+        self.test_config.set('default-availability-zone', 'nova')
 
-        mock_config.side_effect = config_side_effect
         context = neutron_contexts.NeutronGatewayContext()
         self.assertEqual(
             'nova', context()['availability_zone'])
@@ -392,6 +399,19 @@ class TestNeutronGatewayContext(CharmTestCase):
         self.assertEqual(
             'az1', context()['availability_zone'])
 
+    @patch('charmhelpers.contrib.openstack.context.relation_get')
+    @patch('charmhelpers.contrib.openstack.context.related_units')
+    @patch('charmhelpers.contrib.openstack.context.relation_ids')
+    @patch.object(neutron_contexts, 'get_shared_secret')
+    def test_nfg_min_settings(self, _secret, _rids, _runits, _rget):
+        self.test_config.set('firewall-group-log-rate-limit', 90)
+        self.test_config.set('firewall-group-log-burst-limit', 20)
+        self.network_get_primary_address.return_value = '192.168.20.2'
+        self.unit_get.return_value = '10.5.0.1'
+        ctxt = neutron_contexts.NeutronGatewayContext()()
+        self.assertEqual(ctxt['nfg_log_burst_limit'], 25)
+        self.assertEqual(ctxt['nfg_log_rate_limit'], 100)
+
 
 class TestSharedSecret(CharmTestCase):
 
@@ -444,88 +464,83 @@ class TestNovaMetadataContext(CharmTestCase):
                                                    TO_PATCH)
         self.config.side_effect = self.test_config.get
 
+    @patch.object(neutron_contexts.NovaVendorMetadataContext, '__call__')
     @patch.object(neutron_contexts, 'get_local_ip')
     @patch.object(neutron_contexts, 'get_shared_secret')
     @patch.object(neutron_contexts, 'relation_ids')
-    def test_vendordata_static(self, _relation_ids, _get_shared_secret,
-                               _get_local_ip):
+    def test_vendordata_queens(self, _relation_ids, _get_shared_secret,
+                               _get_local_ip, parent):
         _get_shared_secret.return_value = 'asecret'
         _get_local_ip.return_value = '127.0.0.1'
         _relation_ids.return_value = []
-        _vdata = '{"good": "json"}'
-        self.os_release.return_value = 'pike'
+        _vdata_url = 'http://example.org/vdata'
+        _vdata_providers = 'StaticJSON,DynamicJSON'
+        self.os_release.return_value = 'queens'
+        parent.return_value = {
+            'vendor_data': True,
+            'vendor_data_url': _vdata_url,
+            'vendordata_providers': _vdata_providers,
+        }
 
-        self.test_config.set('vendor-data', _vdata)
         ctxt = neutron_contexts.NovaMetadataContext()()
 
         self.assertTrue(ctxt['vendor_data'])
-        self.assertEqual(ctxt['vendordata_providers'], 'StaticJSON')
-
-    @patch.object(neutron_contexts, 'get_local_ip')
-    @patch.object(neutron_contexts, 'get_shared_secret')
-    @patch.object(neutron_contexts, 'relation_ids')
-    def test_vendordata_dynamic(self, _relation_ids, _get_shared_secret,
-                                _get_local_ip):
-        _get_shared_secret.return_value = 'asecret'
-        _get_local_ip.return_value = '127.0.0.1'
-        _relation_ids.return_value = []
-        _vdata_url = 'http://example.org/vdata'
-        self.os_release.return_value = 'pike'
-
-        self.test_config.set('vendor-data-url', _vdata_url)
-        ctxt = neutron_contexts.NovaMetadataContext()()
-
+        self.assertEqual(ctxt['vendordata_providers'], _vdata_providers)
         self.assertEqual(ctxt['vendor_data_url'], _vdata_url)
-        self.assertEqual(ctxt['vendordata_providers'], 'DynamicJSON')
 
+    @patch.object(neutron_contexts.NovaVendorMetadataContext, '__call__')
     @patch.object(neutron_contexts, 'get_local_ip')
     @patch.object(neutron_contexts, 'get_shared_secret')
     @patch.object(neutron_contexts, 'relation_ids')
-    def test_vendordata_static_and_dynamic(self, _relation_ids,
-                                           _get_shared_secret, _get_local_ip):
+    def test_vendordata_rocky(self, _relation_ids, _get_shared_secret,
+                              _get_local_ip, parent):
         _get_shared_secret.return_value = 'asecret'
         _get_local_ip.return_value = '127.0.0.1'
         _relation_ids.return_value = []
-        _vdata = '{"good": "json"}'
-        _vdata_url = 'http://example.org/vdata'
-        self.os_release.return_value = 'pike'
+        self.os_release.return_value = 'rocky'
+        parent.return_value = {
+            'vendor_data': True,
+            'vendor_data_url': 'http://example.org/vdata',
+            'vendordata_providers': 'StaticJSON,DynamicJSON',
+        }
 
-        self.test_config.set('vendor-data', _vdata)
-        self.test_config.set('vendor-data-url', _vdata_url)
         ctxt = neutron_contexts.NovaMetadataContext()()
 
-        self.assertTrue(ctxt['vendor_data'])
-        self.assertEqual(ctxt['vendor_data_url'], _vdata_url)
-        self.assertEqual(ctxt['vendordata_providers'],
-                         'StaticJSON,DynamicJSON')
+        self.assertNotIn('vendor_data', ctxt)
+        self.assertNotIn('vendor_data_url', ctxt)
+        self.assertNotIn('vendordata_providers', ctxt)
 
-    @patch.object(neutron_contexts, 'get_local_ip')
-    @patch.object(neutron_contexts, 'get_shared_secret')
-    @patch.object(neutron_contexts, 'relation_ids')
-    def test_vendordata_mitaka(self, _relation_ids, _get_shared_secret,
-                               _get_local_ip):
-        _get_shared_secret.return_value = 'asecret'
-        _get_local_ip.return_value = '127.0.0.1'
-        _relation_ids.return_value = []
-        _vdata_url = 'http://example.org/vdata'
-        self.os_release.return_value = 'mitaka'
+    @patch.object(neutron_contexts.NovaVendorMetadataJSONContext, '__call__')
+    def test_vendordata_json_queens(self, parent):
+        self.os_release.return_value = 'queens'
+        result = {
+            'vendor_data_json': '{"good": "json"}',
+        }
+        parent.return_value = result
 
-        self.test_config.set('vendor-data-url', _vdata_url)
-        ctxt = neutron_contexts.NovaMetadataContext()()
-        self.assertEqual(
-            ctxt,
-            {
-                'nova_metadata_host': '127.0.0.1',
-                'nova_metadata_port': '8775',
-                'nova_metadata_protocol': 'http',
-                'shared_secret': 'asecret',
-                'vendordata_providers': ''})
+        ctxt = neutron_contexts.NovaMetadataJSONContext('neutron-common')()
+
+        self.assertEqual(result, ctxt)
+
+    @patch.object(neutron_contexts.NovaVendorMetadataJSONContext, '__call__')
+    def test_vendordata_json_rocky(self, parent):
+        self.os_release.return_value = 'rocky'
+        result = {
+            'vendor_data_json': '{}',
+        }
+        parent.return_value = {
+            'vendor_data_json': '{"good": "json"}',
+        }
+
+        ctxt = neutron_contexts.NovaMetadataJSONContext('neutron-common')()
+
+        self.assertEqual(result, ctxt)
 
     @patch.object(neutron_contexts, 'relation_get')
     @patch.object(neutron_contexts, 'related_units')
     @patch.object(neutron_contexts, 'relation_ids')
-    def test_NovaMetadataContext(self, _relation_ids, _related_units,
-                                 _relation_get):
+    def test_NovaMetadataContext_with_relations(self, _relation_ids,
+                                                _related_units, _relation_get):
         _relation_ids.return_value = ['rid:1']
         _related_units.return_value = ['nova-cloud-contoller/0']
         _relation_get.return_value = {
@@ -533,7 +548,7 @@ class TestNovaMetadataContext(CharmTestCase):
             'nova-metadata-port': '8775',
             'nova-metadata-protocol': 'http',
             'shared-metadata-secret': 'auuid'}
-        self.os_release.return_value = 'queens'
+        self.os_release.return_value = 'rocky'
 
         self.assertEqual(
             neutron_contexts.NovaMetadataContext()(),
@@ -541,24 +556,85 @@ class TestNovaMetadataContext(CharmTestCase):
                 'nova_metadata_host': '10.0.0.10',
                 'nova_metadata_port': '8775',
                 'nova_metadata_protocol': 'http',
-                'shared_secret': 'auuid',
-                'vendordata_providers': ''})
+                'shared_secret': 'auuid'})
 
     @patch.object(neutron_contexts, 'get_local_ip')
     @patch.object(neutron_contexts, 'get_shared_secret')
     @patch.object(neutron_contexts, 'relation_ids')
-    def test_NovaMetadataContext_legacy(self, _relation_ids,
-                                        _get_shared_secret,
-                                        _get_local_ip):
+    def test_NovaMetadataContext_no_relations(self, _relation_ids,
+                                              _get_shared_secret,
+                                              _get_local_ip):
         _relation_ids.return_value = []
         _get_shared_secret.return_value = 'buuid'
         _get_local_ip.return_value = '127.0.0.1'
-        self.os_release.return_value = 'pike'
+        self.os_release.return_value = 'rocky'
+
         self.assertEqual(
             neutron_contexts.NovaMetadataContext()(),
             {
                 'nova_metadata_host': '127.0.0.1',
                 'nova_metadata_port': '8775',
                 'nova_metadata_protocol': 'http',
-                'shared_secret': 'buuid',
-                'vendordata_providers': ''})
+                'shared_secret': 'buuid'})
+
+
+class TestGetAvailabilityZone(CharmTestCase):
+
+    def setUp(self):
+        super(TestGetAvailabilityZone, self).setUp(neutron_contexts, TO_PATCH)
+
+    @patch.object(neutron_contexts.os.environ, 'get')
+    def test_get_az_customize_with_env(self, os_environ_get_mock):
+        self.config.side_effect = self.test_config.get
+        self.test_config.set('customize-failure-domain', True)
+        self.test_config.set('default-availability-zone', 'nova')
+
+        def os_environ_get_side_effect(key):
+            return {
+                'JUJU_AVAILABILITY_ZONE': 'az1',
+            }[key]
+        os_environ_get_mock.side_effect = os_environ_get_side_effect
+        az = neutron_contexts.get_availability_zone()
+        self.assertEqual('az1', az)
+
+    @patch.object(neutron_contexts.os.environ, 'get')
+    def test_get_az_customize_without_env(self, os_environ_get_mock):
+        self.config.side_effect = self.test_config.get
+        self.test_config.set('customize-failure-domain', True)
+        self.test_config.set('default-availability-zone', 'mynova')
+
+        def os_environ_get_side_effect(key):
+            return {
+                'JUJU_AVAILABILITY_ZONE': '',
+            }[key]
+        os_environ_get_mock.side_effect = os_environ_get_side_effect
+        az = neutron_contexts.get_availability_zone()
+        self.assertEqual('mynova', az)
+
+    @patch.object(neutron_contexts.os.environ, 'get')
+    def test_get_az_no_customize_without_env(self, os_environ_get_mock):
+        self.config.side_effect = self.test_config.get
+        self.test_config.set('customize-failure-domain', False)
+        self.test_config.set('default-availability-zone', 'nova')
+
+        def os_environ_get_side_effect(key):
+            return {
+                'JUJU_AVAILABILITY_ZONE': '',
+            }[key]
+        os_environ_get_mock.side_effect = os_environ_get_side_effect
+        az = neutron_contexts.get_availability_zone()
+        self.assertEqual('nova', az)
+
+    @patch.object(neutron_contexts.os.environ, 'get')
+    def test_get_az_no_customize_with_env(self, os_environ_get_mock):
+        self.config.side_effect = self.test_config.get
+        self.test_config.set('customize-failure-domain', False)
+        self.test_config.set('default-availability-zone', 'nova')
+
+        def os_environ_get_side_effect(key):
+            return {
+                'JUJU_AVAILABILITY_ZONE': 'az1',
+            }[key]
+        os_environ_get_mock.side_effect = os_environ_get_side_effect
+        az = neutron_contexts.get_availability_zone()
+        self.assertEqual('nova', az)
