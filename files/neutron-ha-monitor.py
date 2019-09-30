@@ -224,8 +224,9 @@ class MonitorNeutronAgentsDaemon(Daemon):
             LOG.info('Moving router %s from %s to %s' %
                      (router_id, routers[router_id], l3_agents[agent]))
             try:
-                quantum.remove_router_from_l3_agent(l3_agent=routers[router_id],
-                                                    router_id=router_id)
+                quantum.remove_router_from_l3_agent(
+                    l3_agent=routers[router_id], router_id=router_id)
+
             except exceptions.NeutronException as e:
                 LOG.error('Remove router raised exception: %s' % e)
             try:
@@ -344,7 +345,6 @@ class MonitorNeutronAgentsDaemon(Daemon):
         if len(dhcp_agents) > 0:
             self.dhcp_agents_reschedule(dhcp_agents, networks, quantum)
 
-
     def check_ovs_tunnel(self, quantum=None):
         '''
         Work around for Bug #1411163
@@ -368,7 +368,8 @@ class MonitorNeutronAgentsDaemon(Daemon):
                         and conf['devices']:
                     LOG.debug('local ovs agent:%s' % agent)
                     ovs_output = subprocess.check_output(['ovs-vsctl',
-                                                          'list-ports', 'br-tun'])
+                                                          'list-ports',
+                                                          'br-tun'])
                     ports = ovs_output.strip().split('\n')
                     look_up_gre_port = False
                     for port in ports:
@@ -377,13 +378,15 @@ class MonitorNeutronAgentsDaemon(Daemon):
                             break
                     if not look_up_gre_port:
                         try:
-                            LOG.error('Local agent has devices, but no ovs tunnel is created,'
-                                      'restart ovs agent.')
-                            cmd = ['sudo', 'service', 'neutron-plugin-openvswitch-agent',
+                            LOG.error('Local agent has devices, but no ovs '
+                                      'tunnel is created, restart ovs agent.')
+                            cmd = ['sudo', 'service',
+                                   'neutron-plugin-openvswitch-agent',
                                    'restart']
                             subprocess.call(cmd)
                         except subprocess.CalledProcessError:
-                            LOG.error('Failed to restart neutron-plugin-openvswitch-agent.')
+                            LOG.error('Failed to restart '
+                                      'neutron-plugin-openvswitch-agent.')
 
     def check_local_agents(self):
         services = ['openvswitch-switch', 'neutron-dhcp-agent',
