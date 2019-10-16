@@ -172,6 +172,19 @@ class TestNeutronUtils(CharmTestCase):
             len(packages),
             len([p for p in packages if not p.startswith('python-')])
         )
+        self.assertTrue('python3-neutron-lbaas' in packages)
+
+    def test_get_packages_ovs_train(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=True)
+        self.config.return_value = 'ovs'
+        self.os_release.return_value = 'train'
+        packages = neutron_utils.get_packages()
+        self.assertEqual(
+            len(packages),
+            len([p for p in packages if not p.startswith('python-')])
+        )
+        self.assertFalse('python3-neutron-lbaas' in packages)
 
     def test_get_purge_packages_ovs(self):
         self.config.return_value = 'ovs'

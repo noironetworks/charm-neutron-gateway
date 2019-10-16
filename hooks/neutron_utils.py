@@ -283,6 +283,8 @@ def get_packages():
     if cmp_os_source >= 'rocky':
         packages = [p for p in packages if not p.startswith('python-')]
         packages.extend(PY3_PACKAGES)
+        if cmp_os_source >= 'train':
+            packages.remove('python3-neutron-lbaas')
 
     return packages
 
