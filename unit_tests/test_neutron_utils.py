@@ -185,6 +185,7 @@ class TestNeutronUtils(CharmTestCase):
             len([p for p in packages if not p.startswith('python-')])
         )
         self.assertFalse('python3-neutron-lbaas' in packages)
+        self.assertFalse('neutron-lbaasv2-agent' in packages)
 
     def test_get_purge_packages_ovs(self):
         self.config.return_value = 'ovs'
@@ -604,6 +605,46 @@ class TestNeutronUtils(CharmTestCase):
             neutron_utils.NEUTRON_L3_AA_PROFILE_PATH: ['neutron-vpn-agent'],
             neutron_utils.NEUTRON_LBAASV2_AA_PROFILE_PATH:
             ['neutron-lbaasv2-agent'],
+            neutron_utils.NEUTRON_METADATA_AA_PROFILE_PATH:
+            ['neutron-metadata-agent'],
+            neutron_utils.NEUTRON_METERING_AA_PROFILE_PATH:
+            ['neutron-metering-agent'],
+            neutron_utils.NOVA_API_METADATA_AA_PROFILE_PATH:
+            ['nova-api-metadata'],
+        }
+        self.assertEqual(neutron_utils.restart_map(), ex_map)
+
+    @patch.object(neutron_utils, 'get_packages')
+    def test_restart_map_ovs_train(self, mock_get_packages):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
+        self.config.return_value = 'ovs'
+        mock_get_packages.return_value = ['neutron-vpn-agent']
+        self.os_release.return_value = 'train'
+        ex_map = {
+            neutron_utils.NEUTRON_CONF: ['neutron-vpn-agent',
+                                         'neutron-dhcp-agent',
+                                         'neutron-metering-agent',
+                                         'neutron-metadata-agent',
+                                         'neutron-openvswitch-agent'],
+            neutron_utils.NEUTRON_DNSMASQ_CONF: ['neutron-dhcp-agent'],
+            neutron_utils.NEUTRON_OVS_AGENT_CONF:
+            ['neutron-openvswitch-agent'],
+            neutron_utils.NEUTRON_METADATA_AGENT_CONF:
+            ['neutron-metadata-agent'],
+            neutron_utils.NEUTRON_VPNAAS_AGENT_CONF: ['neutron-vpn-agent'],
+            neutron_utils.NEUTRON_L3_AGENT_CONF: ['neutron-vpn-agent'],
+            neutron_utils.NEUTRON_DHCP_AGENT_CONF: ['neutron-dhcp-agent'],
+            neutron_utils.NEUTRON_FWAAS_CONF: ['neutron-vpn-agent'],
+            neutron_utils.NEUTRON_METERING_AGENT_CONF:
+            ['neutron-metering-agent'],
+            neutron_utils.NOVA_CONF: ['nova-api-metadata'],
+            neutron_utils.EXT_PORT_CONF: ['ext-port'],
+            neutron_utils.PHY_NIC_MTU_CONF: ['os-charm-phy-nic-mtu'],
+            neutron_utils.NEUTRON_DHCP_AA_PROFILE_PATH: ['neutron-dhcp-agent'],
+            neutron_utils.NEUTRON_OVS_AA_PROFILE_PATH:
+                ['neutron-openvswitch-agent'],
+            neutron_utils.NEUTRON_L3_AA_PROFILE_PATH: ['neutron-vpn-agent'],
             neutron_utils.NEUTRON_METADATA_AA_PROFILE_PATH:
             ['neutron-metadata-agent'],
             neutron_utils.NEUTRON_METERING_AA_PROFILE_PATH:

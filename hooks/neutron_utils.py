@@ -276,6 +276,10 @@ def get_packages():
             # LBaaS v1 dropped in newton
             packages.remove('neutron-lbaas-agent')
             packages.append('neutron-lbaasv2-agent')
+        if cmp_os_source >= 'train':
+            # LBaaS v2 dropped in train
+            packages.remove('neutron-lbaasv2-agent')
+
     if disable_nova_metadata(cmp_os_source):
         packages.remove('nova-api-metadata')
     packages.extend(determine_l3ha_packages())
@@ -670,6 +674,13 @@ def resolve_config_files(plugin, release):
     else:
         drop_config.extend([NEUTRON_LBAAS_AA_PROFILE_PATH])
 
+    # Drop lbaasv2 at train
+    if cmp_os_release >= 'train':
+        drop_config.extend([
+            NEUTRON_LBAASV2_AA_PROFILE_PATH,
+            NEUTRON_LBAAS_AGENT_CONF,
+        ])
+
     if disable_nova_metadata(cmp_os_release):
         drop_config.extend(get_nova_config_files().keys())
     else:
@@ -732,6 +743,7 @@ def restart_map(release=None):
                     that should be restarted when file changes.
     '''
     release = release or os_release('neutron-common')
+    cmp_release = CompareOpenStackReleases(release)
     plugin = config('plugin')
     config_files = resolve_config_files(plugin, release)
     _map = {}
@@ -744,10 +756,11 @@ def restart_map(release=None):
             svcs.remove('neutron-vpn-agent')
         if 'neutron-vpn-agent' in svcs and 'neutron-l3-agent' in svcs:
             svcs.remove('neutron-l3-agent')
-        if (CompareOpenStackReleases(release) >= 'newton' and
-                'neutron-lbaas-agent' in svcs):
+        if cmp_release >= 'newton' and 'neutron-lbaas-agent' in svcs:
             svcs.remove('neutron-lbaas-agent')
             svcs.add('neutron-lbaasv2-agent')
+        if cmp_release >= 'train' and 'neutron-lbaasv2-agent' in svcs:
+            svcs.remove('neutron-lbaasv2-agent')
         if svcs:
             _map[f] = list(svcs)
     return _map
@@ -1095,5 +1108,7 @@ def configure_apparmor():
     if cmp_os_source >= 'newton':
         profiles.remove(NEUTRON_LBAAS_AA_PROFILE)
         profiles.append(NEUTRON_LBAASV2_AA_PROFILE)
+    if cmp_os_source >= 'train':
+        profiles.remove(NEUTRON_LBAASV2_AA_PROFILE)
     for profile in profiles:
         context.AppArmorContext(profile).setup_aa_profile()
