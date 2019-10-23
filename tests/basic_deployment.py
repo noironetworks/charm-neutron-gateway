@@ -61,6 +61,11 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
             {'name': 'neutron-api'}
         ]
 
+        if self._get_openstack_release() >= self.bionic_train:
+            other_services += [
+                {'name': 'placement'},
+            ]
+
         super(NeutronGatewayBasicDeployment, self)._add_services(
             this_service, other_services)
 
@@ -93,6 +98,14 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
             'neutron-api:neutron-plugin-api': 'neutron-gateway:'
                                               'neutron-plugin-api',
         }
+
+        if self._get_openstack_release() >= self.bionic_train:
+            relations.update({
+                'placement:shared-db': 'percona-cluster:shared-db',
+                'placement:identity-service': 'keystone:identity-service',
+                'placement:placement': 'nova-cloud-controller:placement',
+            })
+
         super(NeutronGatewayBasicDeployment, self)._add_relations(relations)
 
     def _configure_services(self):
@@ -117,6 +130,9 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
             'percona-cluster': pxc_config,
             'nova-cloud-controller': nova_cc_config
         }
+        if self._get_openstack_release() >= self.bionic_train:
+            configs['placement'] = {}
+
         super(NeutronGatewayBasicDeployment, self)._configure_services(configs)
 
     def _run_action(self, unit_id, action, *args):
@@ -193,7 +209,8 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
             neutron_services.append('neutron-openvswitch-agent')
         if self._get_openstack_release() >= self.xenial_newton:
             neutron_services.remove('neutron-lbaas-agent')
-            neutron_services.append('neutron-lbaasv2-agent')
+            if self._get_openstack_release() < self.bionic_train:
+                neutron_services.append('neutron-lbaasv2-agent')
 
         commands = {
             self.neutron_gateway_sentry: neutron_services
@@ -328,7 +345,9 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
             'service_tenant_name': 'services'
         }
 
-        if self._get_openstack_release() >= self.xenial_ocata:
+        if self._get_openstack_release() >= self.bionic_train:
+            expected['service_username'] = 'nova'
+        elif self._get_openstack_release() >= self.xenial_ocata:
             # Ocata or later
             expected['service_username'] = 'nova_placement'
         elif self._get_openstack_release() >= self.trusty_kilo:
@@ -636,6 +655,9 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
     def test_305_neutron_lbaas_agent_config(self):
         """Verify the data in the lbaas agent config file. This is only
            available since havana."""
+        if self._get_openstack_release() >= self.bionic_train:
+            u.log.info("Skipping test, gateway has no lbaas after Train")
+            return
 
         unit = self.neutron_gateway_sentry
         conf = '/etc/neutron/lbaas_agent.ini'
@@ -955,7 +977,8 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
         if self._get_openstack_release() < self.xenial_newton:
             services.update({'neutron-lbaas-agent': conf_file})
         if self._get_openstack_release() >= self.xenial_newton:
-            services.update({'neutron-lbaasv2-agent': conf_file})
+            if self._get_openstack_release() < self.bionic_train:
+                services.update({'neutron-lbaasv2-agent': conf_file})
 
         # Make config change, check for svc restart, conf file mod time change
         u.log.debug('Making config change on {}...'.format(juju_service))
@@ -1010,9 +1033,10 @@ class NeutronGatewayBasicDeployment(OpenStackAmuletDeployment):
                 '/etc/apparmor.d/usr.bin.neutron-l3-agent')
         if self._get_openstack_release() >= self.xenial_newton:
             services.pop('neutron-lbaas-agent')
-            services['neutron-lbaasv2-agent'] = ('/etc/apparmor.d/'
-                                                 'usr.bin.neutron-lbaasv2-'
-                                                 'agent')
+            if self._get_openstack_release() < self.bionic_train:
+                services['neutron-lbaasv2-agent'] = ('/etc/apparmor.d/'
+                                                     'usr.bin.neutron-lbaasv2-'
+                                                     'agent')
 
         sentry = self.neutron_gateway_sentry
         juju_service = 'neutron-gateway'
