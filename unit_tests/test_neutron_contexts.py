@@ -202,6 +202,8 @@ class TestNeutronGatewayContext(CharmTestCase):
         self.test_config.set('customize-failure-domain', False)
         self.test_config.set('default-availability-zone', 'nova')
 
+        self.test_config.set('ovsdb-timeout', 10)
+
         self.network_get_primary_address.side_effect = NotImplementedError
         self.unit_get.return_value = '10.5.0.1'
         # Provided by neutron-api relation
@@ -243,6 +245,7 @@ class TestNeutronGatewayContext(CharmTestCase):
             'nfg_log_burst_limit': 50,
             'nfg_log_output_base': '/var/log/firewall-logs',
             'nfg_log_rate_limit': 100,
+            'ovsdb_timeout': 10,
         })
 
     @patch.object(neutron_contexts, 'validate_nfg_log_path', lambda x: x)
@@ -270,6 +273,7 @@ class TestNeutronGatewayContext(CharmTestCase):
 
         self.test_config.set('customize-failure-domain', False)
         self.test_config.set('default-availability-zone', 'nova')
+        self.test_config.set('ovsdb-timeout', 60)
 
         self.network_get_primary_address.return_value = '192.168.20.2'
         self.unit_get.return_value = '10.5.0.1'
@@ -312,6 +316,7 @@ class TestNeutronGatewayContext(CharmTestCase):
             'nfg_log_burst_limit': 25,
             'nfg_log_output_base': None,
             'nfg_log_rate_limit': None,
+            'ovsdb_timeout': 60,
         })
 
     @patch('charmhelpers.contrib.openstack.context.relation_get')

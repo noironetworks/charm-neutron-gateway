@@ -180,6 +180,7 @@ class NeutronGatewayContext(NeutronAPIContext):
             'enable_isolated_metadata': config('enable-isolated-metadata'),
             'availability_zone': get_availability_zone(),
             'enable_nfg_logging': api_settings['enable_nfg_logging'],
+            'ovsdb_timeout': config('ovsdb-timeout'),
         }
 
         ctxt['local_ip'] = get_local_ip()

@@ -334,3 +334,9 @@ options:
       Can be used to avoid excessive memory consumption.
       WARNING: Should be NOT LESS than 25.
       (Available from Stein)
+  ovsdb-timeout:
+    type: int
+    default:
+    description: |
+      Timeout in seconds for ovsdb commands.
+      (Available from Queens)
