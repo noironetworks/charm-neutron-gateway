@@ -295,10 +295,16 @@ def get_packages():
 
 def get_purge_packages():
     '''Return a list of packages to purge for the current OS release'''
+    plugin = config('plugin')
     cmp_os_source = CompareOpenStackReleases(os_release('neutron-common'))
+    purge_packages_list = []
     if cmp_os_source >= 'rocky':
-        return PURGE_PACKAGES
-    return []
+        purge_packages_list.extend(PURGE_PACKAGES)
+    if cmp_os_source >= 'train':
+        purge_packages_list.append('python3-neutron-lbaas')
+        if plugin in (OVS, OVS_ODL):
+            purge_packages_list.append('neutron-lbaasv2-agent')
+    return purge_packages_list
 
 
 def remove_old_packages():
