@@ -206,6 +206,37 @@ class TestNeutronUtils(CharmTestCase):
             neutron_utils.get_purge_packages()
         )
 
+    def test_get_purge_packages_ovs_train(self):
+        self.config.return_value = 'ovs'
+        self.os_release.return_value = 'train'
+        self.assertEqual([
+            'python-mysqldb',
+            'python-psycopg2',
+            'python-oslo.config',
+            'python-nova',
+            'python-neutron',
+            'python-neutron-fwaas',
+            'python-neutron-lbaas',
+            'python3-neutron-lbaas',
+            'neutron-lbaasv2-agent'],
+            neutron_utils.get_purge_packages()
+        )
+
+    def test_get_purge_packages_nsx_train(self):
+        self.config.return_value = 'nsx'
+        self.os_release.return_value = 'train'
+        self.assertEqual([
+            'python-mysqldb',
+            'python-psycopg2',
+            'python-oslo.config',
+            'python-nova',
+            'python-neutron',
+            'python-neutron-fwaas',
+            'python-neutron-lbaas',
+            'python3-neutron-lbaas'],
+            neutron_utils.get_purge_packages()
+        )
+
     def test_get_packages_ovsodl_icehouse(self):
         self.patch_object(neutron_utils, 'disable_nova_metadata',
                           return_value=False)
