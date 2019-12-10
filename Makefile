@@ -9,8 +9,8 @@ test:
 	@tox -e py27
 
 functional_test:
-	@echo Starting Amulet tests...
-	@tox -e func27
+	@echo Starting Zaza tests...
+	@tox -e func
 
 bin/charm_helpers_sync.py:
 	@mkdir -p bin
