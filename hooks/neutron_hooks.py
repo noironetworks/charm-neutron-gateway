@@ -72,6 +72,7 @@ from neutron_utils import (
     remove_legacy_nova_metadata,
     disable_nova_metadata,
     remove_old_packages,
+    deprecated_services,
 )
 
 hooks = Hooks()
@@ -300,6 +301,7 @@ def update_nrpe_config():
     hostname = nrpe.get_nagios_hostname()
     current_unit = nrpe.get_nagios_unit_name()
     nrpe_setup = nrpe.NRPE(hostname=hostname)
+    nrpe.remove_deprecated_check(nrpe_setup, deprecated_services())
     nrpe.add_init_service_checks(nrpe_setup, services(), current_unit)
 
     cronpath = '/etc/cron.d/nagios-netns-check'

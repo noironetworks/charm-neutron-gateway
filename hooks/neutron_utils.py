@@ -1118,3 +1118,12 @@ def configure_apparmor():
         profiles.remove(NEUTRON_LBAASV2_AA_PROFILE)
     for profile in profiles:
         context.AppArmorContext(profile).setup_aa_profile()
+
+
+def deprecated_services():
+    ''' Returns a list of deprecated services with this charm '''
+    cmp_release = CompareOpenStackReleases(os_release('neutron-common'))
+    if cmp_release >= 'train':
+        return ['neutron-lbaasv2-agent']
+
+    return []
