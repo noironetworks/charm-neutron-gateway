@@ -13,7 +13,6 @@ from charmhelpers.core.hookenv import (
 from charmhelpers.contrib.openstack.context import (
     OSContextGenerator,
     NeutronAPIContext,
-    config_flags_parser,
     NovaVendorMetadataContext,
     NovaVendorMetadataJSONContext,
 )
@@ -165,19 +164,14 @@ class NeutronGatewayContext(NeutronAPIContext):
             'plugin': config('plugin'),
             'debug': config('debug'),
             'verbose': config('verbose'),
-            'instance_mtu': config('instance-mtu'),
-            'dns_servers': config('dns-servers'),
             'l2_population': api_settings['l2_population'],
             'enable_dvr': api_settings['enable_dvr'],
             'enable_l3ha': api_settings['enable_l3ha'],
             'extension_drivers': api_settings['extension_drivers'],
-            'dns_domain': api_settings['dns_domain'],
             'overlay_network_type':
             api_settings['overlay_network_type'],
             'rpc_response_timeout': api_settings['rpc_response_timeout'],
             'report_interval': api_settings['report_interval'],
-            'enable_metadata_network': config('enable-metadata-network'),
-            'enable_isolated_metadata': config('enable-isolated-metadata'),
             'availability_zone': get_availability_zone(),
             'enable_nfg_logging': api_settings['enable_nfg_logging'],
             'ovsdb_timeout': config('ovsdb-timeout'),
@@ -196,20 +190,10 @@ class NeutronGatewayContext(NeutronAPIContext):
         if vlan_ranges:
             ctxt['vlan_ranges'] = ','.join(vlan_ranges.split())
 
-        dnsmasq_flags = config('dnsmasq-flags')
-        if dnsmasq_flags:
-            ctxt['dnsmasq_flags'] = config_flags_parser(dnsmasq_flags)
-
         net_dev_mtu = api_settings['network_device_mtu']
         if net_dev_mtu:
             ctxt['network_device_mtu'] = net_dev_mtu
             ctxt['veth_mtu'] = net_dev_mtu
-
-        # Override user supplied config for these plugins as these settings are
-        # mandatory
-        if ctxt['plugin'] in ['nvp', 'nsx', 'n1kv']:
-            ctxt['enable_metadata_network'] = True
-            ctxt['enable_isolated_metadata'] = True
 
         ctxt['nfg_log_output_base'] = validate_nfg_log_path(
             config('firewall-group-log-output-base')

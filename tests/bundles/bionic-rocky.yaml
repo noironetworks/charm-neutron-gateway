@@ -109,6 +109,8 @@ relations:
     - 'rabbitmq-server:amqp'
   - - 'neutron-openvswitch:amqp'
     - 'rabbitmq-server:amqp'
+  - - 'neutron-openvswitch:neutron-plugin-api'
+    - 'neutron-api:neutron-plugin-api'
   - - 'nova-cloud-controller:identity-service'
     - 'keystone:identity-service'
   - - 'nova-cloud-controller:cloud-compute'

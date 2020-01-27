@@ -216,11 +216,8 @@ class TestNeutronGatewayContext(CharmTestCase):
             'shared_secret': 'testsecret',
             'enable_dvr': True,
             'enable_l3ha': True,
-            'dns_servers': '8.8.8.8,4.4.4.4',
             'extension_drivers': 'qos',
-            'dns_domain': 'openstack.example.',
             'local_ip': '10.5.0.1',
-            'instance_mtu': 1420,
             'core_plugin': "ml2",
             'plugin': 'ovs',
             'debug': False,
@@ -234,12 +231,6 @@ class TestNeutronGatewayContext(CharmTestCase):
             'vlan_ranges': 'physnet1:1000:2000,physnet2:2001:3000',
             'network_device_mtu': 9000,
             'veth_mtu': 9000,
-            'enable_isolated_metadata': False,
-            'enable_metadata_network': False,
-            'dnsmasq_flags': {
-                'dhcp-userclass': 'set:ipxe,iPXE',
-                'dhcp-match': 'set:ipxe,175'
-            },
             'availability_zone': 'nova',
             'enable_nfg_logging': True,
             'nfg_log_burst_limit': 50,
@@ -287,11 +278,8 @@ class TestNeutronGatewayContext(CharmTestCase):
             'shared_secret': 'testsecret',
             'enable_dvr': True,
             'enable_l3ha': True,
-            'dns_servers': None,
             'extension_drivers': 'qos',
-            'dns_domain': 'openstack.example.',
             'local_ip': '192.168.20.2',
-            'instance_mtu': 1420,
             'core_plugin': "ml2",
             'plugin': 'ovs',
             'debug': False,
@@ -305,12 +293,6 @@ class TestNeutronGatewayContext(CharmTestCase):
             'vlan_ranges': 'physnet1:1000:2000,physnet2:2001:3000',
             'network_device_mtu': 9000,
             'veth_mtu': 9000,
-            'enable_isolated_metadata': False,
-            'enable_metadata_network': False,
-            'dnsmasq_flags': {
-                'dhcp-userclass': 'set:ipxe,iPXE',
-                'dhcp-match': 'set:ipxe,175'
-            },
             'availability_zone': 'nova',
             'enable_nfg_logging': False,
             'nfg_log_burst_limit': 25,
@@ -318,35 +300,6 @@ class TestNeutronGatewayContext(CharmTestCase):
             'nfg_log_rate_limit': None,
             'ovsdb_timeout': 60,
         })
-
-    @patch('charmhelpers.contrib.openstack.context.relation_get')
-    @patch('charmhelpers.contrib.openstack.context.related_units')
-    @patch('charmhelpers.contrib.openstack.context.relation_ids')
-    @patch.object(neutron_contexts, 'get_shared_secret')
-    def test_dhcp_settings(self, _secret, _rids, _runits, _rget):
-        self.os_release.return_value = 'icehouse'
-        self.test_config.set('enable-isolated-metadata', True)
-        self.test_config.set('enable-metadata-network', True)
-        self.network_get_primary_address.return_value = '192.168.20.2'
-        self.unit_get.return_value = '10.5.0.1'
-        ctxt = neutron_contexts.NeutronGatewayContext()()
-        self.assertTrue(ctxt['enable_isolated_metadata'])
-        self.assertTrue(ctxt['enable_metadata_network'])
-
-    @patch('charmhelpers.contrib.openstack.context.relation_get')
-    @patch('charmhelpers.contrib.openstack.context.related_units')
-    @patch('charmhelpers.contrib.openstack.context.relation_ids')
-    @patch.object(neutron_contexts, 'get_shared_secret')
-    def test_dhcp_setting_plug_override(self, _secret, _rids, _runits, _rget):
-        self.os_release.return_value = 'icehouse'
-        self.test_config.set('plugin', 'nsx')
-        self.test_config.set('enable-isolated-metadata', False)
-        self.test_config.set('enable-metadata-network', False)
-        self.network_get_primary_address.return_value = '192.168.20.2'
-        self.unit_get.return_value = '10.5.0.1'
-        ctxt = neutron_contexts.NeutronGatewayContext()()
-        self.assertTrue(ctxt['enable_isolated_metadata'])
-        self.assertTrue(ctxt['enable_metadata_network'])
 
     @patch('os.environ.get')
     @patch('charmhelpers.contrib.openstack.context.relation_get')

@@ -67,6 +67,8 @@ from charmhelpers.contrib.openstack.context import (
     ExternalPortContext,
     PhyNICMTUContext,
     DataPortContext,
+    validate_ovs_use_veth,
+    DHCPAgentContext,
 )
 import charmhelpers.contrib.openstack.templating as templating
 from charmhelpers.contrib.openstack.neutron import headers_package
@@ -398,15 +400,16 @@ def get_config_files():
 
     NEUTRON_SHARED_CONFIG_FILES = {
         NEUTRON_DHCP_AGENT_CONF: {
-            'hook_contexts': [NeutronGatewayContext()],
+            'hook_contexts': [DHCPAgentContext()],
             'services': ['neutron-dhcp-agent']
         },
         NEUTRON_DNSMASQ_CONF: {
-            'hook_contexts': [NeutronGatewayContext()],
+            'hook_contexts': [DHCPAgentContext()],
             'services': ['neutron-dhcp-agent']
         },
         NEUTRON_METADATA_AGENT_CONF: {
             'hook_contexts': [NetworkServiceContext(),
+                              DHCPAgentContext(),
                               context.WorkerConfigContext(),
                               NeutronGatewayContext(),
                               NovaMetadataContext()],
@@ -1026,9 +1029,7 @@ def check_optional_relations(configs):
                     'hacluster missing configuration: '
                     'vip, vip_iface, vip_cidr')
 
-    # return 'unknown' as the lowest priority to not clobber an existing
-    # status.
-    return 'unknown', ''
+    return validate_ovs_use_veth()
 
 
 def assess_status(configs):
