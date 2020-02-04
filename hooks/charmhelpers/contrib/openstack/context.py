@@ -2386,19 +2386,13 @@ class DHCPAgentContext(OSContextGenerator):
         :returns: Value to use for ovs_use_veth setting
         :rtype: Bool
         """
-        # If this is Trust return True
-        release = lsb_release()['DISTRIB_CODENAME'].lower()
-        if CompareHostReleases(release) <= 'trusty':
-            return True
-        # If there is an existing setting return that
         _existing = self.get_existing_ovs_use_veth()
         if _existing is not None:
             return _existing
-        # If the config value is unset return False
+
         _config = self.parse_ovs_use_veth()
         if _config is None:
             # New better default
             return False
-        # If the config value is set return it
         else:
             return _config
