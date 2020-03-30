@@ -10,7 +10,7 @@ instances plug into.
 Neutron supports a rich plugin/extension framework for propriety networking
 solutions and supports (in core) Nicira NVP, NEC, Cisco and others...
 
-See the upstream [Neutron documentation](http://docs.openstack.org/trunk/openstack-network/admin/content/use_cases_single_router.html)
+See the upstream [Neutron documentation](https://docs.openstack.org/neutron/latest/)
 for more details.
 
 Usage
@@ -43,8 +43,6 @@ The Neutron Gateway can then be added to the deploying:
 The gateway provides two key services; L3 network routing and DHCP services.
 
 These are both required in a fully functional Neutron OpenStack deployment.
-
-See upstream [Neutron multi extnet](http://docs.openstack.org/trunk/config-reference/content/adv_cfg_l3_agent_multi_extnet.html)
 
 Configuration Options
 ---------------------
@@ -109,6 +107,11 @@ This replaces the previous system of using ext-port, which always created a brid
 called br-ex for external networks which was used implicitly by external router
 interfaces.
 
+Note: if the 'data-port' config item is set, then the 'ext-port' option is
+ignored.  This is to prevent misconfiguration of the charm.  A warning is
+logged and the unit is marked as blocked in order to indicate that the charm is
+misconfigured.
+
 Instance MTU
 ============
 
@@ -118,8 +121,5 @@ physical hosts and network equipment. When this is not possible or practical the
 charm's instance-mtu option can be used to reduce instance MTU via DHCP.
 
     juju set neutron-gateway instance-mtu=1400
-
-OpenStack upstream documentation recommends a MTU value of 1400:
-[OpenStack documentation](http://docs.openstack.org/admin-guide-cloud/content/openvswitch_plugin.html)
 
 Note that this option was added in Havana and will be ignored in older releases.

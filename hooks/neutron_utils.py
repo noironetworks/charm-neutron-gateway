@@ -16,6 +16,7 @@ from charmhelpers.core.hookenv import (
     log,
     DEBUG,
     INFO,
+    WARNING,
     ERROR,
     config,
     is_relation_made,
@@ -34,25 +35,27 @@ from charmhelpers.fetch import (
 from charmhelpers.contrib.network.ovs import (
     add_bridge,
     add_bridge_port,
-    is_linuxbridge_interface,
     add_ovsbridge_linuxbridge,
-    full_restart,
     enable_ipfix,
     disable_ipfix,
+    full_restart,
+    get_bridges_and_ports_map,
+    is_linuxbridge_interface,
 )
 from charmhelpers.contrib.hahelpers.cluster import (
     get_hacluster_config,
 )
 from charmhelpers.contrib.openstack.utils import (
+    CompareOpenStackReleases,
     configure_installation_source,
     get_os_codename_install_source,
     make_assess_status_func,
+    os_application_version_set,
     os_release,
     pause_unit,
     reset_os_release,
     resume_unit,
-    os_application_version_set,
-    CompareOpenStackReleases,
+    workload_state_compare,
 )
 
 from charmhelpers.contrib.openstack.neutron import (
@@ -841,28 +844,70 @@ def do_openstack_upgrade(configs):
 
 
 def configure_ovs():
+    """Configure the OVS plugin.
+
+    This function uses the config.yaml parameters ext-port, data-port and
+    bridge-mappings to configure the bridges and ports on the ovs on the
+    unit.
+
+    Note that the ext-port is deprecated and data-port/bridge-mappings are
+    preferred.
+
+    Thus, if data-port is set, then ext-port is ignored (and if set, then
+    it is removed from the set of bridges unless it is defined in
+    bridge-mappings/data-port).  A warning is issued, if both data-port and
+    ext-port are set.
+    """
     if config('plugin') in [OVS, OVS_ODL]:
         if not service_running('openvswitch-switch'):
             full_restart()
-        add_bridge(INT_BRIDGE)
-        add_bridge(EXT_BRIDGE)
-        ext_port_ctx = ExternalPortContext()()
-        if ext_port_ctx and ext_port_ctx['ext_port']:
-            add_bridge_port(EXT_BRIDGE, ext_port_ctx['ext_port'])
+        # Get existing set of bridges and ports
+        current_bridges_and_ports = get_bridges_and_ports_map()
+        log("configure OVS: Current bridges and ports map: {}"
+            .format(", ".join("{}: {}".format(b, ",".join(v))
+                              for b, v in current_bridges_and_ports.items())))
 
+        add_bridge(INT_BRIDGE, brdata=_ovs_additional_data())
+        add_bridge(EXT_BRIDGE, brdata=_ovs_additional_data())
+
+        ext_port_ctx = ExternalPortContext()()
         portmaps = DataPortContext()()
         bridgemaps = parse_bridge_mappings(config('bridge-mappings'))
+
+        # if we have portmaps, then we ignore its value and log an
+        # error/warning to the unit's log.
+        if config('data-port') and config('ext-port'):
+            log("Both ext-port and data-port are set.  ext-port is deprecated"
+                " and is not used when data-port is set", level=ERROR)
+
+        # only use ext-port if data-port is not set
+        if not portmaps and ext_port_ctx and ext_port_ctx['ext_port']:
+            _port = ext_port_ctx['ext_port']
+            add_bridge_port(EXT_BRIDGE, _port,
+                            ifdata=_ovs_additional_data(EXT_BRIDGE),
+                            portdata=_ovs_additional_data(EXT_BRIDGE))
+            log("DEPRECATION: using ext-port to set the port {} on the "
+                "EXT_BRIDGE ({}) is deprecated.  Please use data-port instead."
+                .format(_port, EXT_BRIDGE),
+                level=WARNING)
+
         for br in bridgemaps.values():
-            add_bridge(br)
+            add_bridge(br, brdata=_ovs_additional_data())
             if not portmaps:
                 continue
 
             for port, _br in portmaps.items():
                 if _br == br:
                     if not is_linuxbridge_interface(port):
-                        add_bridge_port(br, port, promisc=True)
+                        add_bridge_port(br, port, promisc=True,
+                                        ifdata=_ovs_additional_data(br),
+                                        portdata=_ovs_additional_data(br))
                     else:
-                        add_ovsbridge_linuxbridge(br, port)
+                        # NOTE(lourot): this will raise on focal+ and/or if the
+                        # system has no `ifup`. See lp:1877594
+                        add_ovsbridge_linuxbridge(
+                            br, port, ifdata=_ovs_additional_data(br),
+                            portdata=_ovs_additional_data(br))
 
         target = config('ipfix-target')
         bridges = [INT_BRIDGE, EXT_BRIDGE]
@@ -878,9 +923,40 @@ def configure_ovs():
             for bridge in bridges:
                 disable_ipfix(bridge)
 
+        new_bridges_and_ports = get_bridges_and_ports_map()
+        log("configure OVS: Final bridges and ports map: {}"
+            .format(", ".join("{}: {}".format(b, ",".join(v))
+                              for b, v in new_bridges_and_ports.items())),
+            level=DEBUG)
+
         # Ensure this runs so that mtu is applied to data-port interfaces if
         # provided.
         service_restart('os-charm-phy-nic-mtu')
+
+
+def _ovs_additional_data(external_id_value=None):
+    """Returns OVS additional data from the given external-id value.
+
+    The returned value is in the input format expected by the
+    charmhelpers.contrib.network.ovs functions.
+
+    We set an external-id as OVS additional data on all the bridges and ports
+    that we create in order to mark them as managed by us. See
+    http://docs.openvswitch.org/en/latest/topics/integration/
+
+    :param external_id_value: Value to be set as external ID. For a bridge,
+        typically 'managed' (which is also the default if nothing is passed).
+        For a port, typically the name of the corresponding bridge.
+    :type external_id_value: str
+    :rtype: Dict[str,Dict[str,str]]
+    """
+    external_id_value = ('managed' if external_id_value is None
+                         else external_id_value)
+    return {
+        'external-ids': {
+            'charm-neutron-gateway': external_id_value
+        }
+    }
 
 
 def copy_file(src, dst, perms=None, force=False):
@@ -1066,6 +1142,45 @@ def check_optional_relations(configs):
     return validate_ovs_use_veth()
 
 
+def check_ext_port_data_port_config(configs):
+    """Checks that if data-port is set (other than None) then if ext-port is
+    also set, add a warning to the status line.
+
+    :param configs: an OSConfigRender() instance.
+    :type configs: OSConfigRender
+    :returns: (status, message)
+    :rtype: (str, str)
+    """
+    if config('data-port') and config('ext-port'):
+        return ("blocked", "ext-port set when data-port set: see config.yaml")
+    # return 'unknown' as the lowest priority to not clobber an existing
+    # status.
+    return 'unknown', ''
+
+
+def sequence_functions(*functions):
+    """Sequence the functions passed so that they all get a chance to run as
+    the check_charm_func for the assess_status.
+
+    :param *functions: a list of functions that return (state, message)
+    :type *functions: List[Callable[[OSConfigRender], (str, str)]]
+    :returns: the Callable that takes configs and returns (state, message)
+    :rtype: Callable[[OSConfigRender], (str, str)]
+    """
+    def _inner_sequenced_functions(configs):
+        state, message = 'unknown', ''
+        for f in functions:
+            new_state, new_message = f(configs)
+            state = workload_state_compare(state, new_state)
+            if message:
+                message = "{}, {}".format(message, new_message)
+            else:
+                message = new_message
+        return state, message
+
+    return _inner_sequenced_functions
+
+
 def assess_status(configs):
     """Assess status of current unit
     Decides what the state of the unit should be based on the current
@@ -1101,9 +1216,11 @@ def assess_status_func(configs):
     required_interfaces = REQUIRED_INTERFACES.copy()
     required_interfaces.update(get_optional_interfaces())
     active_services = [s for s in services() if s not in STOPPED_SERVICES]
+    charm_func = sequence_functions(check_optional_relations,
+                                    check_ext_port_data_port_config)
     return make_assess_status_func(
         configs, required_interfaces,
-        charm_func=check_optional_relations,
+        charm_func=charm_func,
         services=active_services, ports=None)
 
 

@@ -20,6 +20,7 @@ tests:
   - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayTest
   - zaza.openstack.charm_tests.neutron.tests.SecurityTest
   - zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest
+  - zaza.openstack.charm_tests.neutron.tests.NeutronOvsVsctlTest
 configure:
   - zaza.openstack.charm_tests.glance.setup.add_lts_image
   - zaza.openstack.charm_tests.neutron.setup.basic_overcloud_network

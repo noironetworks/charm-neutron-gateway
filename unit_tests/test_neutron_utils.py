@@ -25,6 +25,7 @@ TO_PATCH = [
     'add_bridge',
     'add_bridge_port',
     'add_ovsbridge_linuxbridge',
+    'get_bridges_and_ports_map',
     'is_linuxbridge_interface',
     'headers_package',
     'full_restart',
@@ -297,11 +298,13 @@ class TestNeutronUtils(CharmTestCase):
             DummyExternalPortContext(return_value={'ext_port': 'eth0'})
         neutron_utils.configure_ovs()
         self.add_bridge.assert_has_calls([
-            call('br-int'),
-            call('br-ex'),
-            call('br-data')
+            call('br-int', brdata=ANY),
+            call('br-ex', brdata=ANY),
+            call('br-data', brdata=ANY)
         ])
-        self.add_bridge_port.assert_called_with('br-ex', 'eth0')
+        self.add_bridge_port.assert_called_with(
+            'br-ex', 'eth0', ifdata=ANY, portdata=ANY
+        )
 
     @patch('charmhelpers.contrib.openstack.context.list_nics',
            return_value=['eth0', 'eth0.100', 'eth0.200'])
@@ -318,11 +321,12 @@ class TestNeutronUtils(CharmTestCase):
         self.test_config.set('data-port', 'eth0')
         neutron_utils.configure_ovs()
         self.add_bridge.assert_has_calls([
-            call('br-int'),
-            call('br-ex'),
-            call('br-data')
+            call('br-int', brdata=ANY),
+            call('br-ex', brdata=ANY),
+            call('br-data', brdata=ANY)
         ])
-        calls = [call('br-data', 'eth0', promisc=True)]
+        calls = [call('br-data', 'eth0', promisc=True, ifdata=ANY,
+                      portdata=ANY)]
         self.add_bridge_port.assert_has_calls(calls)
 
         # Now test with bridge:port format and bogus bridge
@@ -331,9 +335,9 @@ class TestNeutronUtils(CharmTestCase):
         self.add_bridge_port.reset_mock()
         neutron_utils.configure_ovs()
         self.add_bridge.assert_has_calls([
-            call('br-int'),
-            call('br-ex'),
-            call('br-data')
+            call('br-int', brdata=ANY),
+            call('br-ex', brdata=ANY),
+            call('br-data', brdata=ANY)
         ])
         # Not called since we have a bogus bridge in data-ports
         self.assertFalse(self.add_bridge_port.called)
@@ -345,12 +349,13 @@ class TestNeutronUtils(CharmTestCase):
         self.add_bridge_port.reset_mock()
         neutron_utils.configure_ovs()
         self.add_bridge.assert_has_calls([
-            call('br-int'),
-            call('br-ex'),
-            call('br1')
+            call('br-int', brdata=ANY),
+            call('br-ex', brdata=ANY),
+            call('br1', brdata=ANY)
         ])
-        calls = [call('br1', 'eth0.100', promisc=True),
-                 call('br1', 'eth0.200', promisc=True)]
+        calls = [
+            call('br1', 'eth0.100', promisc=True, ifdata=ANY, portdata=ANY),
+            call('br1', 'eth0.200', promisc=True, ifdata=ANY, portdata=ANY)]
         self.add_bridge_port.assert_has_calls(calls, any_order=True)
 
     @patch('charmhelpers.contrib.openstack.context.list_nics',
@@ -367,12 +372,23 @@ class TestNeutronUtils(CharmTestCase):
         # assumed)
         self.test_config.set('data-port', 'br-eth0')
         neutron_utils.configure_ovs()
+
+        # Also check that new bridges and ports are marked as managed by us:
+        expected_brdata = {
+            'external-ids': {'charm-neutron-gateway': 'managed'},
+        }
+        expected_ifdata = {
+            'external-ids': {'charm-neutron-gateway': 'br-data'},
+        }
+        expected_portdata = expected_ifdata
+
         self.add_bridge.assert_has_calls([
-            call('br-int'),
-            call('br-ex'),
-            call('br-data')
+            call('br-int', brdata=expected_brdata),
+            call('br-ex', brdata=expected_brdata),
+            call('br-data', brdata=expected_brdata)
         ])
-        calls = [call('br-data', 'br-eth0')]
+        calls = [call('br-data', 'br-eth0', ifdata=expected_ifdata,
+                      portdata=expected_portdata)]
         self.add_ovsbridge_linuxbridge.assert_has_calls(calls)
 
     @patch('charmhelpers.contrib.openstack.context.config')
@@ -387,6 +403,36 @@ class TestNeutronUtils(CharmTestCase):
             call('br-ex', '127.0.0.1:80'),
             call('br-data', '127.0.0.1:80'),
         ])
+
+    @patch.object(neutron_utils, 'DataPortContext')
+    @patch('charmhelpers.contrib.openstack.context.config')
+    def test_configure_ovs_ensure_ext_port_overriden(
+            self, mock_config, mock_data_port_context):
+        mock_config.side_effect = self.test_config.get
+        self.config.side_effect = self.test_config.get
+        self.test_config.set('plugin', 'ovs')
+        self.get_bridges_and_ports_map.return_value = {
+            'br-data': ['p4', 'p5'],
+            'br1': ['p6'],
+        }
+        self.test_config.set(
+            'data-port',
+            'br-data:p4 br-data:p5 br1:p6')
+        self.test_config.set('bridge-mappings', 'net0:br-data net1:br1')
+        self.test_config.set('ext-port', None)
+        self.ExternalPortContext.return_value = \
+            DummyExternalPortContext(return_value={'ext_port': 'eth0'})
+        mock_data_port_context.return_value = \
+            DummyDataPortContext(return_value={
+                'p4': 'br-data',
+                'p5': 'br-data',
+                'p6': 'br1',
+            })
+        self.is_linuxbridge_interface.return_value = False
+        neutron_utils.configure_ovs()
+        # Ensure that ext-port was ignored.
+        self.assertNotIn(call('br-ex', 'eth0', ifdata=ANY, portdata=ANY),
+                         self.add_bridge_port.call_args_list)
 
     @patch.object(neutron_utils, 'register_configs')
     @patch('charmhelpers.contrib.openstack.templating.OSConfigRenderer')
@@ -1006,6 +1052,15 @@ class DummyExternalPortContext():
         return self.return_value
 
 
+class DummyDataPortContext():
+
+    def __init__(self, return_value):
+        self.return_value = return_value
+
+    def __call__(self):
+        return self.return_value
+
+
 cluster1 = ['cluster1-machine1.internal']
 cluster2 = ['cluster2-machine1.internal', 'cluster2-machine2.internal'
             'cluster2-machine3.internal']
@@ -1035,7 +1090,7 @@ class TestNeutronAgentReallocation(CharmTestCase):
             )
 
     @patch.object(neutron_utils, 'get_optional_interfaces')
-    @patch.object(neutron_utils, 'check_optional_relations')
+    @patch.object(neutron_utils, 'sequence_functions')
     @patch.object(neutron_utils, 'REQUIRED_INTERFACES')
     @patch.object(neutron_utils, 'services')
     @patch.object(neutron_utils, 'make_assess_status_func')
@@ -1043,17 +1098,21 @@ class TestNeutronAgentReallocation(CharmTestCase):
                                 make_assess_status_func,
                                 services,
                                 REQUIRED_INTERFACES,
-                                check_optional_relations,
+                                sequence_functions,
                                 get_optional_interfaces):
         services.return_value = ['s1']
         REQUIRED_INTERFACES.copy.return_value = {'int': ['test 1']}
         get_optional_interfaces.return_value = {'opt': ['test 2']}
+        sequence_functions.return_value = 'sequence_return'
         neutron_utils.assess_status_func('test-config')
         # ports=None whilst port checks are disabled.
         make_assess_status_func.assert_called_once_with(
             'test-config',
             {'int': ['test 1'], 'opt': ['test 2']},
-            charm_func=check_optional_relations, services=['s1'], ports=None)
+            charm_func='sequence_return', services=['s1'], ports=None)
+        sequence_functions.assert_called_once_with(
+            neutron_utils.check_optional_relations,
+            neutron_utils.check_ext_port_data_port_config)
 
     def test_pause_unit_helper(self):
         with patch.object(neutron_utils, '_pause_resume_helper') as prh:
