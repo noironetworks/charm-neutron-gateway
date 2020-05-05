@@ -14,6 +14,7 @@ TO_PATCH = [
     'config_changed',
     'charmhelpers.core.hookenv.log',
     'charmhelpers.contrib.openstack.utils.juju_log',
+    'resolve_CONFIGS',
 ]
 
 
