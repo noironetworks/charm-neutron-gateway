@@ -1067,3 +1067,11 @@ class TestNeutronAgentReallocation(CharmTestCase):
         context.AppArmorContext.assert_any_call(
             neutron_utils.NEUTRON_LBAASV2_AA_PROFILE
         )
+
+    @patch.object(neutron_utils, 'disable_nova_metadata')
+    def test_deprecated_services(self, disable_nova_metadata):
+        self.os_release.return_value = 'train'
+        disable_nova_metadata.return_value = True
+        self.assertEqual(neutron_utils.deprecated_services(),
+                         ['nova-api-metadata',
+                          'neutron-lbaasv2-agent'])

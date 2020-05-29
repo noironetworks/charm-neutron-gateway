@@ -268,6 +268,8 @@ def nm_changed():
                     service_restart('nova-api-metadata')
                 db.set('restart_nonce', restart_nonce)
                 db.flush()
+    # LP: #1812813
+    update_nrpe_config()
 
 
 @hooks.hook("cluster-relation-departed")

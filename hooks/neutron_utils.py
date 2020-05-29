@@ -1124,7 +1124,10 @@ def configure_apparmor():
 def deprecated_services():
     ''' Returns a list of deprecated services with this charm '''
     cmp_release = CompareOpenStackReleases(os_release('neutron-common'))
+    services = []
+    if disable_nova_metadata():
+        services.append('nova-api-metadata')
     if cmp_release >= 'train':
-        return ['neutron-lbaasv2-agent']
+        services.append('neutron-lbaasv2-agent')
 
-    return []
+    return services
