@@ -1,6 +1,6 @@
 import sys
-import mock
-from mock import MagicMock
+from unittest import mock
+from unittest.mock import MagicMock
 
 from test_utils import CharmTestCase
 

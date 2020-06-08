@@ -1,4 +1,4 @@
-from mock import MagicMock, call, patch, ANY
+from unittest.mock import MagicMock, call, patch, ANY
 
 import charmhelpers.core.hookenv as hookenv
 import neutron_utils

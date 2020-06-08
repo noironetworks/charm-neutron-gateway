@@ -2,7 +2,7 @@ import io
 
 from contextlib import contextmanager
 
-from mock import (
+from unittest.mock import (
     MagicMock,
     patch
 )

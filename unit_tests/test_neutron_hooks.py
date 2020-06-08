@@ -1,6 +1,6 @@
 import sys
 
-from mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch, call
 
 # python-apt is not installed as part of test-requirements but is imported by
 # some charmhelpers modules so create a fake import.
