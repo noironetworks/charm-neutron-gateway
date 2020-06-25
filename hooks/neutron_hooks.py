@@ -40,6 +40,7 @@ from charmhelpers.contrib.openstack.utils import (
 )
 from charmhelpers.payload.execd import execd_preinstall
 from charmhelpers.core.sysctl import create as create_sysctl
+from charmhelpers.core.kernel import modprobe
 
 from charmhelpers.contrib.charmsupport import nrpe
 from charmhelpers.contrib.hardening.harden import harden
@@ -137,6 +138,18 @@ def config_changed():
             do_openstack_upgrade(CONFIGS)
 
     update_nrpe_config()
+
+    module_settings = config('kernel-modules')
+    if module_settings:
+        if is_container():
+            log("Cannot load modules inside of a container", level=WARNING)
+        else:
+            for module in module_settings.split():
+                try:
+                    modprobe(module)
+                except:
+                    message = "Failed to load kernel module '%s'" % module
+                    log(message, level=WARNING)
 
     sysctl_settings = config('sysctl')
     if sysctl_settings:

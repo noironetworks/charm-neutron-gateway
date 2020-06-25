@@ -204,6 +204,13 @@ options:
     description: |
       YAML-formatted associative array of sysctl key/value pairs to be set
       persistently e.g. '{ kernel.pid_max : 4194303 }'.
+  kernel-modules:
+    type: string
+    default: "nf_conntrack"
+    description: |
+      A space-separated list of kernel modules to load before sysctl
+      options are applied by the charm and system boot.
+      This ensures the sysctl options exist and can be set correctly.
   # Network config (by default all access is over 'private-address')
   os-data-network:
     type: string
