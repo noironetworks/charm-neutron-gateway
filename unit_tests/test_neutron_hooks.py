@@ -54,7 +54,9 @@ TO_PATCH = [
     'install_systemd_override',
     'configure_apparmor',
     'disable_nova_metadata',
+    'disable_neutron_lbaas',
     'remove_legacy_nova_metadata',
+    'remove_legacy_neutron_lbaas',
     'services',
     'remove_old_packages',
     'is_container',
@@ -110,12 +112,14 @@ class TestQuantumHooks(CharmTestCase):
     @patch('sys.exit')
     def test_install_hook_invalid_plugin(self, _exit):
         self.valid_plugin.return_value = False
+        self.disable_neutron_lbaas.return_value = False
         self._call_hook('install')
         self.assertTrue(self.log.called)
         _exit.assert_called_with(1)
 
     def test_config_changed(self):
         self.disable_nova_metadata.return_value = False
+        self.disable_neutron_lbaas.return_value = False
 
         def mock_relids(rel):
             return ['relid']
@@ -143,8 +147,26 @@ class TestQuantumHooks(CharmTestCase):
         self.modprobe.assert_called_with(
             'foo-bar')
 
+    def test_config_change_disable_lbaas(self):
+        self.disable_nova_metadata.return_value = False
+        self.disable_neutron_lbaas.return_value = True
+
+        def mock_relids(rel):
+            return ['relid']
+        self.test_config.set(
+            'sysctl',
+            '{foo : bar}'
+        )
+        self.openstack_upgrade_available.return_value = True
+        self.valid_plugin.return_value = True
+        self.relation_ids.side_effect = mock_relids
+        self._call_hook('config-changed')
+        self.assertTrue(self.disable_neutron_lbaas.called)
+        self.assertTrue(self.remove_legacy_neutron_lbaas.called)
+
     def test_config_changed_in_container(self):
         self.disable_nova_metadata.return_value = False
+        self.disable_neutron_lbaas.return_value = False
 
         def mock_relids(rel):
             return ['relid']
@@ -167,6 +189,7 @@ class TestQuantumHooks(CharmTestCase):
 
     def test_config_changed_upgrade(self):
         self.disable_nova_metadata.return_value = False
+        self.disable_neutron_lbaas.return_value = False
         self.openstack_upgrade_available.return_value = True
         self.valid_plugin.return_value = True
         self._call_hook('config-changed')
@@ -176,6 +199,7 @@ class TestQuantumHooks(CharmTestCase):
     def test_config_changed_n1kv(self):
         self.openstack_upgrade_available.return_value = False
         self.valid_plugin.return_value = True
+        self.disable_neutron_lbaas.return_value = False
         self.filter_installed_packages.side_effect = lambda p: p
         self.test_config.set('plugin', 'n1kv')
         self._call_hook('config-changed')
@@ -186,6 +210,7 @@ class TestQuantumHooks(CharmTestCase):
 
     @patch('sys.exit')
     def test_config_changed_invalid_plugin(self, _exit):
+        self.disable_neutron_lbaas.return_value = False
         self.disable_nova_metadata.return_value = False
         self.valid_plugin.return_value = False
         self._call_hook('config-changed')
@@ -255,6 +280,7 @@ class TestQuantumHooks(CharmTestCase):
 
     def test_nm_changed(self):
         self.disable_nova_metadata.return_value = False
+        self.disable_neutron_lbaas.return_value = False
 
         def _relation_get(key):
             data = {
@@ -278,6 +304,7 @@ class TestQuantumHooks(CharmTestCase):
                                       mock_get_packages):
         '''Ensure first set of restart_trigger restarts nova-api-metadata'''
         self.disable_nova_metadata.return_value = False
+        self.disable_neutron_lbaas.return_value = False
         # as restart_map is embedded into the decorator, we have to mock out
         # the bits in the restart_map to be able to make it pass.
         mock_os_release.return_value = 'mitaka'
@@ -316,6 +343,7 @@ class TestQuantumHooks(CharmTestCase):
                                               mock_get_packages):
         '''Ensure change of restart_trigger restarts nova-api-metadata'''
         self.disable_nova_metadata.return_value = False
+        self.disable_neutron_lbaas.return_value = False
         # as restart_map is embedded into the decorator, we have to mock out
         # the bits in the restart_map to be able to make it pass.
         mock_os_release.return_value = 'mitaka'
@@ -355,6 +383,7 @@ class TestQuantumHooks(CharmTestCase):
         '''Ensure no change in restart_trigger skips restarts'''
         self.patch_object(hooks, 'disable_nova_metadata',
                           return_value=False)
+        self.disable_neutron_lbaas.return_value = False
         # as restart_map is embedded into the decorator, we have to mock out
         # the bits in the restart_map to be able to make it pass.
         mock_os_release.return_value = 'mitaka'
@@ -383,6 +412,7 @@ class TestQuantumHooks(CharmTestCase):
 
     def test_nm_changed_disable_meta(self):
         self.disable_nova_metadata.return_value = True
+        self.disable_neutron_lbaas.return_value = False
 
         def _relation_get(key):
             data = {
@@ -427,6 +457,7 @@ class TestQuantumHooks(CharmTestCase):
     def test_quantum_network_service_relation_changed(self):
         self.patch_object(hooks, 'disable_nova_metadata',
                           return_value=False)
+        self.disable_neutron_lbaas.return_value = False
         self.test_config.set('ha-legacy-mode', True)
         self._call_hook('quantum-network-service-relation-changed')
         self.assertTrue(self.cache_env_data.called)

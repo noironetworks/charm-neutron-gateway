@@ -356,3 +356,9 @@ options:
       order to support kernels with limited namespace support. i.e. Trusty.
       Changing the value after neutron DHCP agents are created will break
       access. The charm will go into a blocked state if this is attempted.
+  disable-neutron-lbaas:
+    type: boolean
+    default: False
+    description: |
+      Manually disable lbaas services. Set this option to True if Octavia
+      is used with neutron. This option is ignored for Train+ OpenStack.

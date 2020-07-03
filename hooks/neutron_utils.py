@@ -684,11 +684,18 @@ def resolve_config_files(plugin, release):
         drop_config.extend([NEUTRON_LBAAS_AA_PROFILE_PATH])
 
     # Drop lbaasv2 at train
-    if cmp_os_release >= 'train':
-        drop_config.extend([
-            NEUTRON_LBAASV2_AA_PROFILE_PATH,
-            NEUTRON_LBAAS_AGENT_CONF,
-        ])
+    # or drop if disable-lbaas option is true
+    if disable_neutron_lbaas():
+        if cmp_os_release >= 'newton':
+            drop_config.extend([
+                NEUTRON_LBAASV2_AA_PROFILE_PATH,
+                NEUTRON_LBAAS_AGENT_CONF,
+            ])
+        else:
+            drop_config.extend([
+                NEUTRON_LBAAS_AA_PROFILE_PATH,
+                NEUTRON_LBAAS_AGENT_CONF,
+            ])
 
     if disable_nova_metadata(cmp_os_release):
         drop_config.extend(get_nova_config_files().keys())
@@ -770,6 +777,11 @@ def restart_map(release=None):
             svcs.add('neutron-lbaasv2-agent')
         if cmp_release >= 'train' and 'neutron-lbaasv2-agent' in svcs:
             svcs.remove('neutron-lbaasv2-agent')
+        if disable_neutron_lbaas():
+            if cmp_release < 'newton' and 'neutron-lbaas-agent' in svcs:
+                svcs.remove('neutron-lbaas-agent')
+            elif cmp_release >= 'newton' and 'neutron-lbaasv2-agent' in svcs:
+                svcs.remove('neutron-lbaasv2-agent')
         if svcs:
             _map[f] = list(svcs)
     return _map
@@ -930,8 +942,21 @@ def remove_legacy_nova_metadata():
         remove_file(f)
 
 
+def remove_legacy_neutron_lbaas():
+    """Remove neutron lbaas files."""
+    cmp_os_source = CompareOpenStackReleases(os_release('neutron-common'))
+    service_name = 'neutron-lbaas-agent'
+    if cmp_os_source >= 'train':
+        return
+    if cmp_os_source >= 'newton':
+        service_name = 'neutron-lbaasv2-agent'
+    service_stop(service_name)
+    service('disable', service_name)
+    service('mask', service_name)
+
+
 def disable_nova_metadata(cmp_os_source=None):
-    """Check whether nova mnetadata service should be disabled."""
+    """Check whether nova metadata service should be disabled."""
     if not cmp_os_source:
         cmp_os_source = CompareOpenStackReleases(os_release('neutron-common'))
     if cmp_os_source >= 'rocky':
@@ -949,6 +974,15 @@ def disable_nova_metadata(cmp_os_source=None):
     else:
         disable = False
     return disable
+
+
+def disable_neutron_lbaas(cmp_os_source=None):
+    """Check whether neutron lbaas service should be disabled."""
+    if not cmp_os_source:
+        cmp_os_source = CompareOpenStackReleases(os_release('neutron-common'))
+    if cmp_os_source >= 'train':
+        return True
+    return config('disable-neutron-lbaas') or False
 
 
 def cache_env_data():
@@ -1127,7 +1161,10 @@ def deprecated_services():
     services = []
     if disable_nova_metadata():
         services.append('nova-api-metadata')
-    if cmp_release >= 'train':
-        services.append('neutron-lbaasv2-agent')
+    if disable_neutron_lbaas():
+        if cmp_release >= 'newton':
+            services.append('neutron-lbaasv2-agent')
+        else:
+            services.append('neutron-lbaas-agent')
 
     return services

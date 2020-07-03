@@ -71,7 +71,9 @@ from neutron_utils import (
     pause_unit_helper,
     resume_unit_helper,
     remove_legacy_nova_metadata,
+    remove_legacy_neutron_lbaas,
     disable_nova_metadata,
+    disable_neutron_lbaas,
     remove_old_packages,
     deprecated_services,
 )
@@ -126,6 +128,12 @@ def install():
     # Install systemd overrides to remove service startup race between
     # n-gateway and n-cloud-controller services.
     install_systemd_override()
+
+    # LP #1825906: prefer to install the lbaas package and then mask it
+    # instead of checking if we need to install that package on each
+    # config-changed hook
+    if disable_neutron_lbaas():
+        remove_legacy_neutron_lbaas()
 
 
 @hooks.hook('config-changed')
@@ -185,6 +193,8 @@ def config_changed():
     # Disable nova metadata if possible,
     if disable_nova_metadata():
         remove_legacy_nova_metadata()
+    if disable_neutron_lbaas():
+        remove_legacy_neutron_lbaas()
 
 
 @hooks.hook('upgrade-charm')
