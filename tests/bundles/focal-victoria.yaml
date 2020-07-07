@@ -1,63 +1,89 @@
 variables:
-  openstack-origin: &openstack-origin distro
+  openstack-origin: &openstack-origin cloud:focal-victoria
 
-series: &series eoan
+series: &series focal
 
 machines:
   0:
     constraints: "mem=3072M"
-  1: {}
-  2: {}
+  1:
+    constraints: "mem=3072M"
+  2:
+    constraints: "mem=3072M"
   3: {}
   4: {}
   5: {}
   6: {}
-  7:
+  7: {}
+  8: {}
+  9:
     constraints: "root-disk=20G mem=4G"
-  8:
+  10:
     constraints: "root-disk=20G mem=4G"
-  9: {}
+  11: {}
+
 # We specify machine placements for these to improve iteration
 # time, given that machine "0" comes up way before machine "7"
 applications:
-  percona-cluster:
-    charm: cs:~openstack-charmers-next/percona-cluster
-    num_units: 1
+
+  neutron-api-mysql-router:
+    charm: cs:~openstack-charmers-next/mysql-router
+  keystone-mysql-router:
+    charm: cs:~openstack-charmers-next/mysql-router
+  nova-cloud-controller-mysql-router:
+    charm: cs:~openstack-charmers-next/mysql-router
+  glance-mysql-router:
+    charm: cs:~openstack-charmers-next/mysql-router
+  placement-mysql-router:
+    charm: cs:~openstack-charmers-next/mysql-router
+
+  mysql-innodb-cluster:
+    charm: cs:~openstack-charmers-next/mysql-innodb-cluster
+    num_units: 3
     options:
       source: *openstack-origin
     to:
       - '0'
+      - '1'
+      - '2'
+
   rabbitmq-server:
     charm: cs:~openstack-charmers-next/rabbitmq-server
     num_units: 1
     options:
+    options:
       source: *openstack-origin
     to:
-      - '1'
+      - '3'
+
   neutron-api:
     charm: cs:~openstack-charmers-next/neutron-api
     series: *series
     num_units: 1
     options:
+      manage-neutron-plugin-legacy-mode: true
       flat-network-providers: physnet1
       neutron-security-groups: true
       openstack-origin: *openstack-origin
     to:
-      - '2'
+      - '4'
+
   keystone:
     charm: cs:~openstack-charmers-next/keystone
     num_units: 1
     options:
       openstack-origin: *openstack-origin
     to:
-      - '3'
+      - '5'
+
   glance:
     charm: cs:~openstack-charmers-next/glance
     num_units: 1
     options:
       openstack-origin: *openstack-origin
     to:
-      - '4'
+      - '6'
+
   neutron-openvswitch:
     charm: cs:~openstack-charmers-next/neutron-openvswitch
   neutron-gateway:
@@ -67,7 +93,8 @@ applications:
       bridge-mappings: physnet1:br-ex
       openstack-origin: *openstack-origin
     to:
-      - '5'
+      - '7'
+
   nova-cloud-controller:
     charm: cs:~openstack-charmers-next/nova-cloud-controller
     num_units: 1
@@ -75,68 +102,105 @@ applications:
       network-manager: Neutron
       openstack-origin: *openstack-origin
     to:
-      - '6'
+      - '8'
+
   nova-compute:
     charm: cs:~openstack-charmers-next/nova-compute
     num_units: 2
     options:
       openstack-origin: *openstack-origin
     to:
-      - '7'
-      - '8'
+      - '9'
+      - '10'
+
   placement:
     charm: cs:~openstack-charmers-next/placement
     num_units: 1
     options:
       openstack-origin: *openstack-origin
     to:
-      - '9'
+      - '11'
+
 relations:
+
   - - 'neutron-api:shared-db'
-    - 'percona-cluster:shared-db'
+    - 'neutron-api-mysql-router:shared-db'
+  - - 'neutron-api-mysql-router:db-router'
+    - 'mysql-innodb-cluster:db-router'
+
   - - 'neutron-api:amqp'
     - 'rabbitmq-server:amqp'
+
   - - 'neutron-api:neutron-api'
     - 'nova-cloud-controller:neutron-api'
+
   - - 'neutron-api:neutron-plugin-api'
     - 'neutron-gateway:neutron-plugin-api'
+
   - - 'neutron-api:identity-service'
     - 'keystone:identity-service'
+
   - - 'keystone:shared-db'
-    - 'percona-cluster:shared-db'
+    - 'keystone-mysql-router:shared-db'
+  - - 'keystone-mysql-router:db-router'
+    - 'mysql-innodb-cluster:db-router'
+
   - - 'nova-compute:neutron-plugin'
     - 'neutron-openvswitch:neutron-plugin'
+
   - - 'nova-cloud-controller:shared-db'
-    - 'percona-cluster:shared-db'
+    - 'nova-cloud-controller-mysql-router:shared-db'
+  - - 'nova-cloud-controller-mysql-router:db-router'
+    - 'mysql-innodb-cluster:db-router'
+
   - - 'neutron-gateway:amqp'
     - 'rabbitmq-server:amqp'
+
   - - 'nova-cloud-controller:amqp'
     - 'rabbitmq-server:amqp'
+
   - - 'nova-compute:amqp'
     - 'rabbitmq-server:amqp'
+
   - - 'neutron-openvswitch:amqp'
     - 'rabbitmq-server:amqp'
+
   - - 'neutron-openvswitch:neutron-plugin-api'
     - 'neutron-api:neutron-plugin-api'
+
   - - 'nova-cloud-controller:identity-service'
     - 'keystone:identity-service'
+
   - - 'nova-cloud-controller:cloud-compute'
     - 'nova-compute:cloud-compute'
+
   - - 'glance:identity-service'
     - 'keystone:identity-service'
+
   - - 'glance:shared-db'
-    - 'percona-cluster:shared-db'
+    - 'glance-mysql-router:shared-db'
+  - - 'glance-mysql-router:db-router'
+    - 'mysql-innodb-cluster:db-router'
+
   - - 'glance:amqp'
     - 'rabbitmq-server:amqp'
+
   - - 'nova-compute:image-service'
     - 'glance:image-service'
+
   - - 'nova-cloud-controller:image-service'
     - 'glance:image-service'
+
   - - 'nova-cloud-controller:quantum-network-service'
     - 'neutron-gateway:quantum-network-service'
+
   - - 'placement:shared-db'
-    - 'percona-cluster:shared-db'
+    - 'placement-mysql-router:shared-db'
+  - - 'placement-mysql-router:db-router'
+    - 'mysql-innodb-cluster:db-router'
+
   - - 'placement:identity-service'
     - 'keystone:identity-service'
+
   - - 'placement:placement'
     - 'nova-cloud-controller:placement'
