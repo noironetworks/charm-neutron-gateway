@@ -362,3 +362,11 @@ options:
     description: |
       Manually disable lbaas services. Set this option to True if Octavia
       is used with neutron. This option is ignored for Train+ OpenStack.
+  keepalived-healthcheck-interval:
+    type: int
+    default: 30
+    description: |
+      By default all HA routers will check their external network gateway
+      by sending a ping and if that fails they trigger a vrrp transition. This
+      option defines how frequently this check is performed. Setting this value
+      to 0 will disable the healthchecks.
