@@ -1,5 +1,6 @@
 charm_name: neutron-gateway
 gate_bundles:
+  - focal-victoria
   - focal-ussuri
   - bionic-ussuri
   - bionic-train
@@ -15,7 +16,6 @@ smoke_bundles:
   - bionic-train
 dev_bundles:
   - groovy-victoria
-  - focal-victoria
 tests:
   - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayTest
   - zaza.openstack.charm_tests.neutron.tests.SecurityTest
