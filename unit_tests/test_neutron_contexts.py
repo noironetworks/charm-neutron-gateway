@@ -204,6 +204,8 @@ class TestNeutronGatewayContext(CharmTestCase):
 
         self.test_config.set('ovsdb-timeout', 10)
 
+        self.test_config.set('keepalived-healthcheck-interval', 0)
+
         self.network_get_primary_address.side_effect = NotImplementedError
         self.unit_get.return_value = '10.5.0.1'
         # Provided by neutron-api relation
@@ -237,6 +239,7 @@ class TestNeutronGatewayContext(CharmTestCase):
             'nfg_log_output_base': '/var/log/firewall-logs',
             'nfg_log_rate_limit': 100,
             'ovsdb_timeout': 10,
+            'keepalived_healthcheck_interval': 0,
         })
 
     @patch.object(neutron_contexts, 'validate_nfg_log_path', lambda x: x)
@@ -299,6 +302,7 @@ class TestNeutronGatewayContext(CharmTestCase):
             'nfg_log_output_base': None,
             'nfg_log_rate_limit': None,
             'ovsdb_timeout': 60,
+            'keepalived_healthcheck_interval': 30,
         })
 
     @patch('os.environ.get')

@@ -175,6 +175,8 @@ class NeutronGatewayContext(NeutronAPIContext):
             'availability_zone': get_availability_zone(),
             'enable_nfg_logging': api_settings['enable_nfg_logging'],
             'ovsdb_timeout': config('ovsdb-timeout'),
+            'keepalived_healthcheck_interval':
+            config('keepalived-healthcheck-interval')
         }
 
         ctxt['local_ip'] = get_local_ip()
