@@ -24,10 +24,10 @@ from charmhelpers.core.host import (
     is_container,
     lsb_release,
 )
-from charmhelpers.contrib.hahelpers.cluster import(
+from charmhelpers.contrib.hahelpers.cluster import (
     get_hacluster_config,
 )
-from charmhelpers.contrib.hahelpers.apache import(
+from charmhelpers.contrib.hahelpers.apache import (
     install_ca_cert
 )
 from charmhelpers.contrib.openstack.utils import (
@@ -155,7 +155,7 @@ def config_changed():
             for module in module_settings.split():
                 try:
                     modprobe(module)
-                except:
+                except Exception:
                     message = "Failed to load kernel module '%s'" % module
                     log(message, level=WARNING)
 
