@@ -1,9 +1,12 @@
+import contextlib
+import io
 import os
 import logging
 
 import unittest
 import yaml
 
+import unittest.mock as mock
 from unittest.mock import patch
 
 
@@ -138,3 +141,21 @@ class TestRelation(object):
         elif attr in self.relation_data:
             return self.relation_data[attr]
         return None
+
+
+@contextlib.contextmanager
+def patch_open():
+    """Patch open() to allow mocking both open() itself and the file that is
+    yielded.
+
+    Yields the mock for "open" and "file", respectively."""
+    mock_open = mock.MagicMock(spec=open)
+    mock_file = mock.MagicMock(spec=io.FileIO)
+
+    @contextlib.contextmanager
+    def stub_open(*args, **kwargs):
+        mock_open(*args, **kwargs)
+        yield mock_file
+
+    with patch('builtins.open', stub_open):
+        yield mock_open, mock_file
