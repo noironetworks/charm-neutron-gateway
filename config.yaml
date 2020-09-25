@@ -86,6 +86,10 @@ options:
       traffic to the external public network. Valid values are either MAC
       addresses (in which case only MAC addresses for interfaces without an IP
       address already assigned will be used), or interfaces (eth0)
+      .
+      Note that if data-port is used then this config item is ignored, a
+      warning is logged, and the unit is marked as blocked in order to indicate
+      that the charm is misconfigured.
   data-port:
     type: string
     default:
@@ -204,6 +208,13 @@ options:
     description: |
       YAML-formatted associative array of sysctl key/value pairs to be set
       persistently e.g. '{ kernel.pid_max : 4194303 }'.
+  kernel-modules:
+    type: string
+    default: "nf_conntrack"
+    description: |
+      A space-separated list of kernel modules to load before sysctl
+      options are applied by the charm and system boot.
+      This ensures the sysctl options exist and can be set correctly.
   # Network config (by default all access is over 'private-address')
   os-data-network:
     type: string
@@ -334,3 +345,32 @@ options:
       Can be used to avoid excessive memory consumption.
       WARNING: Should be NOT LESS than 25.
       (Available from Stein)
+  ovsdb-timeout:
+    type: int
+    default:
+    description: |
+      Timeout in seconds for ovsdb commands.
+      (Available from Queens)
+  ovs-use-veth:
+    type: string
+    default:
+    description: |
+      "True" or "False" string value. It is safe to leave this option unset.
+      This option allows the DHCP agent to use a veth interface for OVS in
+      order to support kernels with limited namespace support. i.e. Trusty.
+      Changing the value after neutron DHCP agents are created will break
+      access. The charm will go into a blocked state if this is attempted.
+  disable-neutron-lbaas:
+    type: boolean
+    default: False
+    description: |
+      Manually disable lbaas services. Set this option to True if Octavia
+      is used with neutron. This option is ignored for Train+ OpenStack.
+  keepalived-healthcheck-interval:
+    type: int
+    default: 30
+    description: |
+      By default all HA routers will check their external network gateway
+      by sending a ping and if that fails they trigger a vrrp transition. This
+      option defines how frequently this check is performed. Setting this value
+      to 0 will disable the healthchecks.

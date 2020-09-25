@@ -25,10 +25,10 @@ from charmhelpers.core.host import (
     is_container,
     lsb_release,
 )
-from charmhelpers.contrib.hahelpers.cluster import(
+from charmhelpers.contrib.hahelpers.cluster import (
     get_hacluster_config,
 )
-from charmhelpers.contrib.hahelpers.apache import(
+from charmhelpers.contrib.hahelpers.apache import (
     install_ca_cert
 )
 from charmhelpers.contrib.openstack.utils import (
@@ -42,6 +42,7 @@ from charmhelpers.contrib.openstack.utils import (
 )
 from charmhelpers.payload.execd import execd_preinstall
 from charmhelpers.core.sysctl import create as create_sysctl
+from charmhelpers.core.kernel import modprobe
 
 from charmhelpers.contrib.charmsupport import nrpe
 from charmhelpers.contrib.hardening.harden import harden
@@ -75,12 +76,31 @@ from neutron_utils import (
     pause_unit_helper,
     resume_unit_helper,
     remove_legacy_nova_metadata,
+    remove_legacy_neutron_lbaas,
     disable_nova_metadata,
+    disable_neutron_lbaas,
     remove_old_packages,
+    deprecated_services,
 )
 
 hooks = Hooks()
-CONFIGS = register_configs()
+# Note that CONFIGS is now set up via resolve_CONFIGS so that it is not a
+# module load time constraint.
+CONFIGS = None
+
+
+def resolve_CONFIGS():
+    """lazy function to resolve the CONFIGS so that it doesn't have to evaluate
+    at module load time.  Note that it also returns the CONFIGS so that it can
+    be used in other, module loadtime, functions.
+
+    :returns: CONFIGS variable
+    :rtype: `:class:templating.OSConfigRenderer`
+    """
+    global CONFIGS
+    if CONFIGS is None:
+        CONFIGS = register_configs()
+    return CONFIGS
 
 
 @hooks.hook('install')
@@ -114,18 +134,35 @@ def install():
     # n-gateway and n-cloud-controller services.
     install_systemd_override()
 
+    # LP #1825906: prefer to install the lbaas package and then mask it
+    # instead of checking if we need to install that package on each
+    # config-changed hook
+    if disable_neutron_lbaas():
+        remove_legacy_neutron_lbaas()
+
 
 @hooks.hook('config-changed')
-@restart_on_change(restart_map())
+@restart_on_change(restart_map)
 @harden()
 def config_changed():
-    global CONFIGS
     if not config('action-managed-upgrade'):
         if openstack_upgrade_available(NEUTRON_COMMON):
             status_set('maintenance', 'Running openstack upgrade')
             do_openstack_upgrade(CONFIGS)
 
     update_nrpe_config()
+
+    module_settings = config('kernel-modules')
+    if module_settings:
+        if is_container():
+            log("Cannot load modules inside of a container", level=WARNING)
+        else:
+            for module in module_settings.split():
+                try:
+                    modprobe(module)
+                except Exception:
+                    message = "Failed to load kernel module '%s'" % module
+                    log(message, level=WARNING)
 
     sysctl_settings = config('sysctl')
     if sysctl_settings:
@@ -161,6 +198,8 @@ def config_changed():
     # Disable nova metadata if possible,
     if disable_nova_metadata():
         remove_legacy_nova_metadata()
+    if disable_neutron_lbaas():
+        remove_legacy_neutron_lbaas()
 
 
 @hooks.hook('upgrade-charm')
@@ -196,7 +235,7 @@ def amqp_joined(relation_id=None):
 
 @hooks.hook('amqp-nova-relation-departed')
 @hooks.hook('amqp-nova-relation-changed')
-@restart_on_change(restart_map())
+@restart_on_change(restart_map)
 def amqp_nova_changed():
     if 'amqp-nova' not in CONFIGS.complete_contexts():
         log('amqp relation incomplete. Peer not ready?')
@@ -205,7 +244,7 @@ def amqp_nova_changed():
 
 
 @hooks.hook('amqp-relation-departed')
-@restart_on_change(restart_map())
+@restart_on_change(restart_map)
 def amqp_departed():
     if 'amqp' not in CONFIGS.complete_contexts():
         log('amqp relation incomplete. Peer not ready?')
@@ -216,13 +255,13 @@ def amqp_departed():
 @hooks.hook('amqp-relation-changed',
             'cluster-relation-changed',
             'cluster-relation-joined')
-@restart_on_change(restart_map())
+@restart_on_change(restart_map)
 def amqp_changed():
     CONFIGS.write_all()
 
 
 @hooks.hook('neutron-plugin-api-relation-changed')
-@restart_on_change(restart_map())
+@restart_on_change(restart_map)
 def neutron_plugin_api_changed():
     if use_l3ha():
         apt_update()
@@ -231,7 +270,7 @@ def neutron_plugin_api_changed():
 
 
 @hooks.hook('quantum-network-service-relation-changed')
-@restart_on_change(restart_map())
+@restart_on_change(restart_map)
 def nm_changed():
     CONFIGS.write_all()
     if relation_get('ca_cert'):
@@ -257,10 +296,12 @@ def nm_changed():
                     service_restart('nova-api-metadata')
                 db.set('restart_nonce', restart_nonce)
                 db.flush()
+    # LP: #1812813
+    update_nrpe_config()
 
 
 @hooks.hook("cluster-relation-departed")
-@restart_on_change(restart_map())
+@restart_on_change(restart_map)
 def cluster_departed():
     if config('plugin') in ['nvp', 'nsx']:
         log('Unable to re-assign agent resources for'
@@ -290,6 +331,7 @@ def update_nrpe_config():
     hostname = nrpe.get_nagios_hostname()
     current_unit = nrpe.get_nagios_unit_name()
     nrpe_setup = nrpe.NRPE(hostname=hostname)
+    nrpe.remove_deprecated_check(nrpe_setup, deprecated_services())
     nrpe.add_init_service_checks(nrpe_setup, services(), current_unit)
 
     cronpath = '/etc/cron.d/nagios-netns-check'
@@ -370,9 +412,14 @@ def post_series_upgrade():
         resume_unit_helper, CONFIGS)
 
 
-if __name__ == '__main__':
+def main():
     try:
         hooks.execute(sys.argv)
     except UnregisteredHookError as e:
         log('Unknown hook {} - skipping.'.format(e))
     assess_status(CONFIGS)
+
+
+if __name__ == '__main__':
+    resolve_CONFIGS()
+    main()

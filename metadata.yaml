@@ -14,13 +14,14 @@ description: |
   This charm provides central Neutron networking services as part
   of a Neutron based OpenStack deployment
 tags:
-  - openstack
+- openstack
 series:
-  - xenial
-  - bionic
-  - cosmic
-  - disco
-  - trusty
+- xenial
+- bionic
+- eoan
+- focal
+- trusty
+- groovy
 extra-bindings:
   data:
 provides:

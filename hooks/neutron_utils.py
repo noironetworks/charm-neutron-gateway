@@ -16,6 +16,7 @@ from charmhelpers.core.hookenv import (
     log,
     DEBUG,
     INFO,
+    WARNING,
     ERROR,
     config,
     is_relation_made,
@@ -34,25 +35,27 @@ from charmhelpers.fetch import (
 from charmhelpers.contrib.network.ovs import (
     add_bridge,
     add_bridge_port,
-    is_linuxbridge_interface,
     add_ovsbridge_linuxbridge,
-    full_restart,
     enable_ipfix,
     disable_ipfix,
+    full_restart,
+    get_bridges_and_ports_map,
+    is_linuxbridge_interface,
 )
 from charmhelpers.contrib.hahelpers.cluster import (
     get_hacluster_config,
 )
 from charmhelpers.contrib.openstack.utils import (
+    CompareOpenStackReleases,
     configure_installation_source,
     get_os_codename_install_source,
     make_assess_status_func,
+    os_application_version_set,
     os_release,
     pause_unit,
     reset_os_release,
     resume_unit,
-    os_application_version_set,
-    CompareOpenStackReleases,
+    workload_state_compare,
 )
 
 from charmhelpers.contrib.openstack.neutron import (
@@ -67,6 +70,8 @@ from charmhelpers.contrib.openstack.context import (
     ExternalPortContext,
     PhyNICMTUContext,
     DataPortContext,
+    validate_ovs_use_veth,
+    DHCPAgentContext,
 )
 import charmhelpers.contrib.openstack.templating as templating
 from charmhelpers.contrib.openstack.neutron import headers_package
@@ -286,6 +291,10 @@ def get_packages():
             # LBaaS v1 dropped in newton
             packages.remove('neutron-lbaas-agent')
             packages.append('neutron-lbaasv2-agent')
+        if cmp_os_source >= 'train':
+            # LBaaS v2 dropped in train
+            packages.remove('neutron-lbaasv2-agent')
+
     if disable_nova_metadata(cmp_os_source):
         packages.remove('nova-api-metadata')
     packages.extend(determine_l3ha_packages())
@@ -293,16 +302,24 @@ def get_packages():
     if cmp_os_source >= 'rocky':
         packages = [p for p in packages if not p.startswith('python-')]
         packages.extend(PY3_PACKAGES)
+        if cmp_os_source >= 'train':
+            packages.remove('python3-neutron-lbaas')
 
     return packages
 
 
 def get_purge_packages():
     '''Return a list of packages to purge for the current OS release'''
+    plugin = config('plugin')
     cmp_os_source = CompareOpenStackReleases(os_release('neutron-common'))
+    purge_packages_list = []
     if cmp_os_source >= 'rocky':
-        return PURGE_PACKAGES
-    return []
+        purge_packages_list.extend(PURGE_PACKAGES)
+    if cmp_os_source >= 'train':
+        purge_packages_list.append('python3-neutron-lbaas')
+        if plugin in (OVS, OVS_ODL):
+            purge_packages_list.append('neutron-lbaasv2-agent')
+    return purge_packages_list
 
 
 def remove_old_packages():
@@ -352,228 +369,257 @@ NOVA_CONF_DIR = '/etc/nova'
 NOVA_CONF = "/etc/nova/nova.conf"
 VENDORDATA_FILE = '%s/vendor_data.json' % NOVA_CONF_DIR
 
-NOVA_CONFIG_FILES = {
-    NOVA_CONF: {
-        'hook_contexts': [NetworkServiceContext(),
-                          NeutronGatewayContext(),
-                          SyslogContext(),
-                          context.WorkerConfigContext(),
-                          context.ZeroMQContext(),
-                          context.NotificationDriverContext(),
-                          NovaMetadataContext()],
-        'services': ['nova-api-metadata']
-    },
-    NOVA_API_METADATA_AA_PROFILE_PATH: {
-        'services': ['nova-api-metadata'],
-        'hook_contexts': [
-            context.AppArmorContext(NOVA_API_METADATA_AA_PROFILE)
-        ],
-    },
-    VENDORDATA_FILE: {
-        'services': [],
-        'hook_contexts': [NovaMetadataJSONContext('neutron-common')],
-    },
-}
+__NOVA_CONFIG_FILES = None
+__CONFIG_FILES = None
 
-NEUTRON_SHARED_CONFIG_FILES = {
-    NEUTRON_DHCP_AGENT_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-dhcp-agent']
-    },
-    NEUTRON_DNSMASQ_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-dhcp-agent']
-    },
-    NEUTRON_METADATA_AGENT_CONF: {
-        'hook_contexts': [NetworkServiceContext(),
-                          context.WorkerConfigContext(),
-                          NeutronGatewayContext(),
-                          NovaMetadataContext()],
-        'services': ['neutron-metadata-agent']
-    },
-    NEUTRON_DHCP_AA_PROFILE_PATH: {
-        'services': ['neutron-dhcp-agent'],
-        'hook_contexts': [
-            context.AppArmorContext(NEUTRON_DHCP_AA_PROFILE)
-        ],
-    },
-    NEUTRON_LBAAS_AA_PROFILE_PATH: {
-        'services': ['neutron-lbaas-agent'],
-        'hook_contexts': [
-            context.AppArmorContext(NEUTRON_LBAAS_AA_PROFILE)
-        ],
-    },
-    NEUTRON_LBAASV2_AA_PROFILE_PATH: {
-        'services': ['neutron-lbaasv2-agent'],
-        'hook_contexts': [
-            context.AppArmorContext(NEUTRON_LBAASV2_AA_PROFILE)
-        ],
-    },
-    NEUTRON_METADATA_AA_PROFILE_PATH: {
-        'services': ['neutron-metadata-agent'],
-        'hook_contexts': [
-            context.AppArmorContext(NEUTRON_METADATA_AA_PROFILE)
-        ],
-    },
-    NEUTRON_METERING_AA_PROFILE_PATH: {
-        'services': ['neutron-metering-agent'],
-        'hook_contexts': [
-            context.AppArmorContext(NEUTRON_METERING_AA_PROFILE)
-        ],
-    },
-}
-NEUTRON_SHARED_CONFIG_FILES.update(NOVA_CONFIG_FILES)
 
-NEUTRON_OVS_CONFIG_FILES = {
-    NEUTRON_CONF: {
-        'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
-                          NeutronGatewayContext(),
-                          SyslogContext(),
-                          context.ZeroMQContext(),
-                          context.WorkerConfigContext(),
-                          context.NotificationDriverContext()],
-        'services': ['neutron-l3-agent',
-                     'neutron-dhcp-agent',
-                     'neutron-metadata-agent',
-                     'neutron-plugin-openvswitch-agent',
-                     'neutron-plugin-metering-agent',
-                     'neutron-metering-agent',
-                     'neutron-lbaas-agent',
-                     'neutron-vpn-agent']
-    },
-    NEUTRON_L3_AGENT_CONF: {
-        'hook_contexts': [NetworkServiceContext(),
-                          L3AgentContext(),
-                          NeutronGatewayContext()],
-        'services': ['neutron-l3-agent', 'neutron-vpn-agent']
-    },
-    NEUTRON_METERING_AGENT_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-plugin-metering-agent',
-                     'neutron-metering-agent']
-    },
-    NEUTRON_LBAAS_AGENT_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-lbaas-agent']
-    },
-    NEUTRON_VPNAAS_AGENT_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-vpn-agent']
-    },
-    NEUTRON_FWAAS_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-l3-agent', 'neutron-vpn-agent']
-    },
-    NEUTRON_ML2_PLUGIN_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-plugin-openvswitch-agent']
-    },
-    NEUTRON_OVS_AGENT_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-plugin-openvswitch-agent']
-    },
-    NEUTRON_OVS_AA_PROFILE_PATH: {
-        'services': ['neutron-plugin-openvswitch-agent'],
-        'hook_contexts': [
-            context.AppArmorContext(NEUTRON_OVS_AA_PROFILE)
-        ],
-    },
-    NEUTRON_L3_AA_PROFILE_PATH: {
-        'services': ['neutron-l3-agent', 'neutron-vpn-agent'],
-        'hook_contexts': [
-            context.AppArmorContext(NEUTRON_L3_AA_PROFILE)
-        ],
-    },
-    EXT_PORT_CONF: {
-        'hook_contexts': [ExternalPortContext()],
-        'services': ['ext-port']
-    },
-    PHY_NIC_MTU_CONF: {
-        'hook_contexts': [PhyNICMTUContext()],
-        'services': ['os-charm-phy-nic-mtu']
+def get_nova_config_files():
+    global __NOVA_CONFIG_FILES
+    if __NOVA_CONFIG_FILES is not None:
+        return __NOVA_CONFIG_FILES
+
+    NOVA_CONFIG_FILES = {
+        NOVA_CONF: {
+            'hook_contexts': [NetworkServiceContext(),
+                              NeutronGatewayContext(),
+                              SyslogContext(),
+                              context.WorkerConfigContext(),
+                              context.ZeroMQContext(),
+                              context.NotificationDriverContext(),
+                              NovaMetadataContext()],
+            'services': ['nova-api-metadata']
+        },
+        NOVA_API_METADATA_AA_PROFILE_PATH: {
+            'services': ['nova-api-metadata'],
+            'hook_contexts': [
+                context.AppArmorContext(NOVA_API_METADATA_AA_PROFILE)
+            ],
+        },
+        VENDORDATA_FILE: {
+            'services': [],
+            'hook_contexts': [NovaMetadataJSONContext('neutron-common')],
+        },
     }
-}
-NEUTRON_OVS_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
 
-NEUTRON_OVS_ODL_CONFIG_FILES = {
-    NEUTRON_CONF: {
-        'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
-                          NeutronGatewayContext(),
-                          SyslogContext(),
-                          context.ZeroMQContext(),
-                          context.WorkerConfigContext(),
-                          context.NotificationDriverContext()],
-        'services': ['neutron-l3-agent',
-                     'neutron-dhcp-agent',
-                     'neutron-metadata-agent',
-                     'neutron-plugin-metering-agent',
-                     'neutron-metering-agent',
-                     'neutron-lbaas-agent',
-                     'neutron-vpn-agent']
-    },
-    NEUTRON_L3_AGENT_CONF: {
-        'hook_contexts': [NetworkServiceContext(),
-                          L3AgentContext(),
-                          NeutronGatewayContext()],
-        'services': ['neutron-l3-agent', 'neutron-vpn-agent']
-    },
-    NEUTRON_METERING_AGENT_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-plugin-metering-agent',
-                     'neutron-metering-agent']
-    },
-    NEUTRON_LBAAS_AGENT_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-lbaas-agent']
-    },
-    NEUTRON_VPNAAS_AGENT_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-vpn-agent']
-    },
-    NEUTRON_FWAAS_CONF: {
-        'hook_contexts': [NeutronGatewayContext()],
-        'services': ['neutron-l3-agent', 'neutron-vpn-agent']
-    },
-    EXT_PORT_CONF: {
-        'hook_contexts': [ExternalPortContext()],
-        'services': ['ext-port']
-    },
-    PHY_NIC_MTU_CONF: {
-        'hook_contexts': [PhyNICMTUContext()],
-        'services': ['os-charm-phy-nic-mtu']
+    return NOVA_CONFIG_FILES
+
+
+def get_config_files():
+    global __CONFIG_FILES
+    if __CONFIG_FILES is not None:
+        return __CONFIG_FILES
+
+    NOVA_CONFIG_FILES = get_nova_config_files()
+
+    NEUTRON_SHARED_CONFIG_FILES = {
+        NEUTRON_DHCP_AGENT_CONF: {
+            'hook_contexts': [DHCPAgentContext()],
+            'services': ['neutron-dhcp-agent']
+        },
+        NEUTRON_DNSMASQ_CONF: {
+            'hook_contexts': [DHCPAgentContext()],
+            'services': ['neutron-dhcp-agent']
+        },
+        NEUTRON_METADATA_AGENT_CONF: {
+            'hook_contexts': [NetworkServiceContext(),
+                              DHCPAgentContext(),
+                              context.WorkerConfigContext(),
+                              NeutronGatewayContext(),
+                              NovaMetadataContext()],
+            'services': ['neutron-metadata-agent']
+        },
+        NEUTRON_DHCP_AA_PROFILE_PATH: {
+            'services': ['neutron-dhcp-agent'],
+            'hook_contexts': [
+                context.AppArmorContext(NEUTRON_DHCP_AA_PROFILE)
+            ],
+        },
+        NEUTRON_LBAAS_AA_PROFILE_PATH: {
+            'services': ['neutron-lbaas-agent'],
+            'hook_contexts': [
+                context.AppArmorContext(NEUTRON_LBAAS_AA_PROFILE)
+            ],
+        },
+        NEUTRON_LBAASV2_AA_PROFILE_PATH: {
+            'services': ['neutron-lbaasv2-agent'],
+            'hook_contexts': [
+                context.AppArmorContext(NEUTRON_LBAASV2_AA_PROFILE)
+            ],
+        },
+        NEUTRON_METADATA_AA_PROFILE_PATH: {
+            'services': ['neutron-metadata-agent'],
+            'hook_contexts': [
+                context.AppArmorContext(NEUTRON_METADATA_AA_PROFILE)
+            ],
+        },
+        NEUTRON_METERING_AA_PROFILE_PATH: {
+            'services': ['neutron-metering-agent'],
+            'hook_contexts': [
+                context.AppArmorContext(NEUTRON_METERING_AA_PROFILE)
+            ],
+        },
     }
-}
-NEUTRON_OVS_ODL_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
+    NEUTRON_SHARED_CONFIG_FILES.update(NOVA_CONFIG_FILES)
 
-NEUTRON_NSX_CONFIG_FILES = {
-    NEUTRON_CONF: {
-        'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
-                          NeutronGatewayContext(),
-                          context.WorkerConfigContext(),
-                          SyslogContext()],
-        'services': ['neutron-dhcp-agent', 'neutron-metadata-agent']
-    },
-}
-NEUTRON_NSX_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
+    NEUTRON_OVS_CONFIG_FILES = {
+        NEUTRON_CONF: {
+            'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
+                              NeutronGatewayContext(),
+                              SyslogContext(),
+                              context.ZeroMQContext(),
+                              context.WorkerConfigContext(),
+                              context.NotificationDriverContext()],
+            'services': ['neutron-l3-agent',
+                         'neutron-dhcp-agent',
+                         'neutron-metadata-agent',
+                         'neutron-plugin-openvswitch-agent',
+                         'neutron-plugin-metering-agent',
+                         'neutron-metering-agent',
+                         'neutron-lbaas-agent',
+                         'neutron-vpn-agent']
+        },
+        NEUTRON_L3_AGENT_CONF: {
+            'hook_contexts': [NetworkServiceContext(),
+                              L3AgentContext(),
+                              NeutronGatewayContext()],
+            'services': ['neutron-l3-agent', 'neutron-vpn-agent']
+        },
+        NEUTRON_METERING_AGENT_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-plugin-metering-agent',
+                         'neutron-metering-agent']
+        },
+        NEUTRON_LBAAS_AGENT_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-lbaas-agent']
+        },
+        NEUTRON_VPNAAS_AGENT_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-vpn-agent']
+        },
+        NEUTRON_FWAAS_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-l3-agent', 'neutron-vpn-agent']
+        },
+        NEUTRON_ML2_PLUGIN_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-plugin-openvswitch-agent']
+        },
+        NEUTRON_OVS_AGENT_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-plugin-openvswitch-agent']
+        },
+        NEUTRON_OVS_AA_PROFILE_PATH: {
+            'services': ['neutron-plugin-openvswitch-agent'],
+            'hook_contexts': [
+                context.AppArmorContext(NEUTRON_OVS_AA_PROFILE)
+            ],
+        },
+        NEUTRON_L3_AA_PROFILE_PATH: {
+            'services': ['neutron-l3-agent', 'neutron-vpn-agent'],
+            'hook_contexts': [
+                context.AppArmorContext(NEUTRON_L3_AA_PROFILE)
+            ],
+        },
+        EXT_PORT_CONF: {
+            'hook_contexts': [ExternalPortContext()],
+            'services': ['ext-port']
+        },
+        PHY_NIC_MTU_CONF: {
+            'hook_contexts': [PhyNICMTUContext()],
+            'services': ['os-charm-phy-nic-mtu']
+        }
+    }
+    NEUTRON_OVS_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
 
-NEUTRON_N1KV_CONFIG_FILES = {
-    NEUTRON_CONF: {
-        'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
-                          NeutronGatewayContext(),
-                          context.WorkerConfigContext(),
-                          SyslogContext()],
-        'services': ['neutron-l3-agent',
-                     'neutron-dhcp-agent',
-                     'neutron-metadata-agent']
-    },
-    NEUTRON_L3_AGENT_CONF: {
-        'hook_contexts': [NetworkServiceContext(),
-                          L3AgentContext(),
-                          NeutronGatewayContext()],
-        'services': ['neutron-l3-agent']
-    },
-}
-NEUTRON_N1KV_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
+    NEUTRON_OVS_ODL_CONFIG_FILES = {
+        NEUTRON_CONF: {
+            'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
+                              NeutronGatewayContext(),
+                              SyslogContext(),
+                              context.ZeroMQContext(),
+                              context.WorkerConfigContext(),
+                              context.NotificationDriverContext()],
+            'services': ['neutron-l3-agent',
+                         'neutron-dhcp-agent',
+                         'neutron-metadata-agent',
+                         'neutron-plugin-metering-agent',
+                         'neutron-metering-agent',
+                         'neutron-lbaas-agent',
+                         'neutron-vpn-agent']
+        },
+        NEUTRON_L3_AGENT_CONF: {
+            'hook_contexts': [NetworkServiceContext(),
+                              L3AgentContext(),
+                              NeutronGatewayContext()],
+            'services': ['neutron-l3-agent', 'neutron-vpn-agent']
+        },
+        NEUTRON_METERING_AGENT_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-plugin-metering-agent',
+                         'neutron-metering-agent']
+        },
+        NEUTRON_LBAAS_AGENT_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-lbaas-agent']
+        },
+        NEUTRON_VPNAAS_AGENT_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-vpn-agent']
+        },
+        NEUTRON_FWAAS_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-l3-agent', 'neutron-vpn-agent']
+        },
+        EXT_PORT_CONF: {
+            'hook_contexts': [ExternalPortContext()],
+            'services': ['ext-port']
+        },
+        PHY_NIC_MTU_CONF: {
+            'hook_contexts': [PhyNICMTUContext()],
+            'services': ['os-charm-phy-nic-mtu']
+        }
+    }
+    NEUTRON_OVS_ODL_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
+
+    NEUTRON_NSX_CONFIG_FILES = {
+        NEUTRON_CONF: {
+            'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
+                              NeutronGatewayContext(),
+                              context.WorkerConfigContext(),
+                              SyslogContext()],
+            'services': ['neutron-dhcp-agent', 'neutron-metadata-agent']
+        },
+    }
+    NEUTRON_NSX_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
+
+    NEUTRON_N1KV_CONFIG_FILES = {
+        NEUTRON_CONF: {
+            'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
+                              NeutronGatewayContext(),
+                              context.WorkerConfigContext(),
+                              SyslogContext()],
+            'services': ['neutron-l3-agent',
+                         'neutron-dhcp-agent',
+                         'neutron-metadata-agent']
+        },
+        NEUTRON_L3_AGENT_CONF: {
+            'hook_contexts': [NetworkServiceContext(),
+                              L3AgentContext(),
+                              NeutronGatewayContext()],
+            'services': ['neutron-l3-agent']
+        },
+    }
+    NEUTRON_N1KV_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
+
+    __CONFIG_FILES = {
+        NSX: NEUTRON_NSX_CONFIG_FILES,
+        OVS: NEUTRON_OVS_CONFIG_FILES,
+        N1KV: NEUTRON_N1KV_CONFIG_FILES,
+        OVS_ODL: NEUTRON_OVS_ODL_CONFIG_FILES
+    }
+
+    return __CONFIG_FILES
 
 NEUTRON_ACI_CONFIG_FILES = {
     NEUTRON_CONF: {
@@ -654,7 +700,7 @@ def resolve_config_files(plugin, release):
     :returns: dict of configuration files, contexts
               and associated services
     '''
-    config_files = deepcopy(CONFIG_FILES)
+    config_files = deepcopy(get_config_files())
     drop_config = []
     cmp_os_release = CompareOpenStackReleases(release)
     if plugin == OVS or plugin == ACI:
@@ -674,8 +720,22 @@ def resolve_config_files(plugin, release):
     else:
         drop_config.extend([NEUTRON_LBAAS_AA_PROFILE_PATH])
 
+    # Drop lbaasv2 at train
+    # or drop if disable-lbaas option is true
+    if disable_neutron_lbaas():
+        if cmp_os_release >= 'newton':
+            drop_config.extend([
+                NEUTRON_LBAASV2_AA_PROFILE_PATH,
+                NEUTRON_LBAAS_AGENT_CONF,
+            ])
+        else:
+            drop_config.extend([
+                NEUTRON_LBAAS_AA_PROFILE_PATH,
+                NEUTRON_LBAAS_AGENT_CONF,
+            ])
+
     if disable_nova_metadata(cmp_os_release):
-        drop_config.extend(NOVA_CONFIG_FILES.keys())
+        drop_config.extend(get_nova_config_files().keys())
     else:
         if is_relation_made('amqp-nova'):
             amqp_nova_ctxt = context.AMQPContext(
@@ -736,6 +796,7 @@ def restart_map(release=None):
                     that should be restarted when file changes.
     '''
     release = release or os_release('neutron-common')
+    cmp_release = CompareOpenStackReleases(release)
     plugin = config('plugin')
     config_files = resolve_config_files(plugin, release)
     _map = {}
@@ -748,16 +809,25 @@ def restart_map(release=None):
             svcs.remove('neutron-vpn-agent')
         if 'neutron-vpn-agent' in svcs and 'neutron-l3-agent' in svcs:
             svcs.remove('neutron-l3-agent')
-        if (CompareOpenStackReleases(release) >= 'newton' and
-                'neutron-lbaas-agent' in svcs):
+        if cmp_release >= 'newton' and 'neutron-lbaas-agent' in svcs:
             svcs.remove('neutron-lbaas-agent')
             svcs.add('neutron-lbaasv2-agent')
+<<<<<<< HEAD
         if plugin == "aci" and 'neutron-metadata-agent' in svcs:
             svcs.remove('neutron-metadata-agent')
         if plugin == "aci" and 'neutron-lbaas-agent' in svcs:
             svcs.remove('neutron-lbaas-agent')
         if plugin == "aci" and 'neutron-lbaasv2-agent' in svcs:
             svcs.remove('neutron-lbaasv2-agent')
+=======
+        if cmp_release >= 'train' and 'neutron-lbaasv2-agent' in svcs:
+            svcs.remove('neutron-lbaasv2-agent')
+        if disable_neutron_lbaas():
+            if cmp_release < 'newton' and 'neutron-lbaas-agent' in svcs:
+                svcs.remove('neutron-lbaas-agent')
+            elif cmp_release >= 'newton' and 'neutron-lbaasv2-agent' in svcs:
+                svcs.remove('neutron-lbaasv2-agent')
+>>>>>>> master
         if svcs:
             _map[f] = list(svcs)
     return _map
@@ -817,28 +887,70 @@ def do_openstack_upgrade(configs):
 
 
 def configure_ovs():
+    """Configure the OVS plugin.
+
+    This function uses the config.yaml parameters ext-port, data-port and
+    bridge-mappings to configure the bridges and ports on the ovs on the
+    unit.
+
+    Note that the ext-port is deprecated and data-port/bridge-mappings are
+    preferred.
+
+    Thus, if data-port is set, then ext-port is ignored (and if set, then
+    it is removed from the set of bridges unless it is defined in
+    bridge-mappings/data-port).  A warning is issued, if both data-port and
+    ext-port are set.
+    """
     if config('plugin') in [OVS, OVS_ODL]:
         if not service_running('openvswitch-switch'):
             full_restart()
-        add_bridge(INT_BRIDGE)
-        add_bridge(EXT_BRIDGE)
-        ext_port_ctx = ExternalPortContext()()
-        if ext_port_ctx and ext_port_ctx['ext_port']:
-            add_bridge_port(EXT_BRIDGE, ext_port_ctx['ext_port'])
+        # Get existing set of bridges and ports
+        current_bridges_and_ports = get_bridges_and_ports_map()
+        log("configure OVS: Current bridges and ports map: {}"
+            .format(", ".join("{}: {}".format(b, ",".join(v))
+                              for b, v in current_bridges_and_ports.items())))
 
+        add_bridge(INT_BRIDGE, brdata=_ovs_additional_data())
+        add_bridge(EXT_BRIDGE, brdata=_ovs_additional_data())
+
+        ext_port_ctx = ExternalPortContext()()
         portmaps = DataPortContext()()
         bridgemaps = parse_bridge_mappings(config('bridge-mappings'))
+
+        # if we have portmaps, then we ignore its value and log an
+        # error/warning to the unit's log.
+        if config('data-port') and config('ext-port'):
+            log("Both ext-port and data-port are set.  ext-port is deprecated"
+                " and is not used when data-port is set", level=ERROR)
+
+        # only use ext-port if data-port is not set
+        if not portmaps and ext_port_ctx and ext_port_ctx['ext_port']:
+            _port = ext_port_ctx['ext_port']
+            add_bridge_port(EXT_BRIDGE, _port,
+                            ifdata=_ovs_additional_data(EXT_BRIDGE),
+                            portdata=_ovs_additional_data(EXT_BRIDGE))
+            log("DEPRECATION: using ext-port to set the port {} on the "
+                "EXT_BRIDGE ({}) is deprecated.  Please use data-port instead."
+                .format(_port, EXT_BRIDGE),
+                level=WARNING)
+
         for br in bridgemaps.values():
-            add_bridge(br)
+            add_bridge(br, brdata=_ovs_additional_data())
             if not portmaps:
                 continue
 
             for port, _br in portmaps.items():
                 if _br == br:
                     if not is_linuxbridge_interface(port):
-                        add_bridge_port(br, port, promisc=True)
+                        add_bridge_port(br, port, promisc=True,
+                                        ifdata=_ovs_additional_data(br),
+                                        portdata=_ovs_additional_data(br))
                     else:
-                        add_ovsbridge_linuxbridge(br, port)
+                        # NOTE(lourot): this will raise on focal+ and/or if the
+                        # system has no `ifup`. See lp:1877594
+                        add_ovsbridge_linuxbridge(
+                            br, port, ifdata=_ovs_additional_data(br),
+                            portdata=_ovs_additional_data(br))
 
         target = config('ipfix-target')
         bridges = [INT_BRIDGE, EXT_BRIDGE]
@@ -854,9 +966,40 @@ def configure_ovs():
             for bridge in bridges:
                 disable_ipfix(bridge)
 
+        new_bridges_and_ports = get_bridges_and_ports_map()
+        log("configure OVS: Final bridges and ports map: {}"
+            .format(", ".join("{}: {}".format(b, ",".join(v))
+                              for b, v in new_bridges_and_ports.items())),
+            level=DEBUG)
+
         # Ensure this runs so that mtu is applied to data-port interfaces if
         # provided.
         service_restart('os-charm-phy-nic-mtu')
+
+
+def _ovs_additional_data(external_id_value=None):
+    """Returns OVS additional data from the given external-id value.
+
+    The returned value is in the input format expected by the
+    charmhelpers.contrib.network.ovs functions.
+
+    We set an external-id as OVS additional data on all the bridges and ports
+    that we create in order to mark them as managed by us. See
+    http://docs.openvswitch.org/en/latest/topics/integration/
+
+    :param external_id_value: Value to be set as external ID. For a bridge,
+        typically 'managed' (which is also the default if nothing is passed).
+        For a port, typically the name of the corresponding bridge.
+    :type external_id_value: str
+    :rtype: Dict[str,Dict[str,str]]
+    """
+    external_id_value = ('managed' if external_id_value is None
+                         else external_id_value)
+    return {
+        'external-ids': {
+            'charm-neutron-gateway': external_id_value
+        }
+    }
 
 
 def copy_file(src, dst, perms=None, force=False):
@@ -914,12 +1057,25 @@ def remove_legacy_nova_metadata():
     service_stop(service_name)
     service('disable', service_name)
     service('mask', service_name)
-    for f in NOVA_CONFIG_FILES.keys():
+    for f in get_nova_config_files().keys():
         remove_file(f)
 
 
+def remove_legacy_neutron_lbaas():
+    """Remove neutron lbaas files."""
+    cmp_os_source = CompareOpenStackReleases(os_release('neutron-common'))
+    service_name = 'neutron-lbaas-agent'
+    if cmp_os_source >= 'train':
+        return
+    if cmp_os_source >= 'newton':
+        service_name = 'neutron-lbaasv2-agent'
+    service_stop(service_name)
+    service('disable', service_name)
+    service('mask', service_name)
+
+
 def disable_nova_metadata(cmp_os_source=None):
-    """Check whether nova mnetadata service should be disabled."""
+    """Check whether nova metadata service should be disabled."""
     if not cmp_os_source:
         cmp_os_source = CompareOpenStackReleases(os_release('neutron-common'))
     if cmp_os_source >= 'rocky':
@@ -937,6 +1093,15 @@ def disable_nova_metadata(cmp_os_source=None):
     else:
         disable = False
     return disable
+
+
+def disable_neutron_lbaas(cmp_os_source=None):
+    """Check whether neutron lbaas service should be disabled."""
+    if not cmp_os_source:
+        cmp_os_source = CompareOpenStackReleases(os_release('neutron-common'))
+    if cmp_os_source >= 'train':
+        return True
+    return config('disable-neutron-lbaas') or False
 
 
 def cache_env_data():
@@ -1012,14 +1177,51 @@ def check_optional_relations(configs):
     if relation_ids('ha'):
         try:
             get_hacluster_config()
-        except:
+        except Exception:
             return ('blocked',
                     'hacluster missing configuration: '
                     'vip, vip_iface, vip_cidr')
 
+    return validate_ovs_use_veth()
+
+
+def check_ext_port_data_port_config(configs):
+    """Checks that if data-port is set (other than None) then if ext-port is
+    also set, add a warning to the status line.
+
+    :param configs: an OSConfigRender() instance.
+    :type configs: OSConfigRender
+    :returns: (status, message)
+    :rtype: (str, str)
+    """
+    if config('data-port') and config('ext-port'):
+        return ("blocked", "ext-port set when data-port set: see config.yaml")
     # return 'unknown' as the lowest priority to not clobber an existing
     # status.
     return 'unknown', ''
+
+
+def sequence_functions(*functions):
+    """Sequence the functions passed so that they all get a chance to run as
+    the check_charm_func for the assess_status.
+
+    :param *functions: a list of functions that return (state, message)
+    :type *functions: List[Callable[[OSConfigRender], (str, str)]]
+    :returns: the Callable that takes configs and returns (state, message)
+    :rtype: Callable[[OSConfigRender], (str, str)]
+    """
+    def _inner_sequenced_functions(configs):
+        state, message = 'unknown', ''
+        for f in functions:
+            new_state, new_message = f(configs)
+            state = workload_state_compare(state, new_state)
+            if message:
+                message = "{}, {}".format(message, new_message)
+            else:
+                message = new_message
+        return state, message
+
+    return _inner_sequenced_functions
 
 
 def assess_status(configs):
@@ -1057,9 +1259,11 @@ def assess_status_func(configs):
     required_interfaces = REQUIRED_INTERFACES.copy()
     required_interfaces.update(get_optional_interfaces())
     active_services = [s for s in services() if s not in STOPPED_SERVICES]
+    charm_func = sequence_functions(check_optional_relations,
+                                    check_ext_port_data_port_config)
     return make_assess_status_func(
         configs, required_interfaces,
-        charm_func=check_optional_relations,
+        charm_func=charm_func,
         services=active_services, ports=None)
 
 
@@ -1105,12 +1309,22 @@ def configure_apparmor():
     if cmp_os_source >= 'newton':
         profiles.remove(NEUTRON_LBAAS_AA_PROFILE)
         profiles.append(NEUTRON_LBAASV2_AA_PROFILE)
+    if cmp_os_source >= 'train':
+        profiles.remove(NEUTRON_LBAASV2_AA_PROFILE)
     for profile in profiles:
         context.AppArmorContext(profile).setup_aa_profile()
 
 
-def get_availability_zone():
-    use_juju_az = config('customize-failure-domain')
-    juju_az = os.environ.get('JUJU_AVAILABILITY_ZONE')
-    return (juju_az if use_juju_az and juju_az
-            else config('default-availability-zone'))
+def deprecated_services():
+    ''' Returns a list of deprecated services with this charm '''
+    cmp_release = CompareOpenStackReleases(os_release('neutron-common'))
+    services = []
+    if disable_nova_metadata():
+        services.append('nova-api-metadata')
+    if disable_neutron_lbaas():
+        if cmp_release >= 'newton':
+            services.append('neutron-lbaasv2-agent')
+        else:
+            services.append('neutron-lbaas-agent')
+
+    return services
