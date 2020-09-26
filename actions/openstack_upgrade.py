@@ -25,7 +25,7 @@ from neutron_utils import (
 
 from neutron_hooks import (
     config_changed,
-    CONFIGS,
+    resolve_CONFIGS,
 )
 
 
@@ -39,7 +39,7 @@ def openstack_upgrade():
 
     if do_action_openstack_upgrade(NEUTRON_COMMON,
                                    do_openstack_upgrade,
-                                   CONFIGS):
+                                   resolve_CONFIGS()):
         config_changed()
 
 

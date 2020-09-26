@@ -1,18 +1,82 @@
-# Bootstrap the model if necessary.
-bootstrap: True
-# Re-use bootstrap node.
-reset: True
-# Use tox/requirements to drive the venv instead of bundletester's venv feature.
-virtualenv: False
-# Leave makefile empty, otherwise unit/lint tests will rerun ahead of amulet.
-makefile: []
-# Do not specify juju PPA sources.  Juju is presumed to be pre-installed
-# and configured in all test runner environments.
-#sources:
-# Do not specify or rely on system packages.
-#packages:
-# Do not specify python packages here.  Use test-requirements.txt
-# and tox instead.  ie. The venv is constructed before bundletester
-# is invoked.
-#python-packages:
-reset_timeout: 600
+charm_name: neutron-gateway
+
+# NOTE: the OVN migration test runs at the end of a regular gate check and adds
+# no more than 5-10 minutes to each job. We want this to run from focal-ussuri
+# and onwards as that is the point where we recomend our users to migrate from
+# OVS to OVN.
+#
+smoke_bundles:
+  - migrate-ovn: focal-ussuri
+
+gate_bundles:
+  - migrate-ovn: focal-ussuri
+  - bionic-ussuri
+  - bionic-train
+  - bionic-stein
+  - bionic-rocky
+  - bionic-queens
+  - xenial-queens
+  - xenial-pike
+  - xenial-ocata
+  - xenial-mitaka
+  - trusty-mitaka
+
+dev_bundles:
+  # Pending new Victoria snapshot that includes fix for LP: #1887781
+  - migrate-ovn: focal-victoria
+  - migrate-ovn: groovy-victoria
+
+target_deploy_status:
+  neutron-api-plugin-ovn:
+    workload-status: waiting
+  ovn-chassis:
+    workload-status: maintenance
+    workload-status-message: "Paused. Use 'resume' action to resume normal service."
+  ovn-dedicated-chassis:
+    workload-status: maintenance
+    workload-status-message: "Paused. Use 'resume' action to resume normal service."
+  ovn-central:
+    workload-status: waiting
+    workload-status-message: "'ovsdb-peer' incomplete, 'certificates' awaiting server certificate data"
+  vault:
+    workload-status: blocked
+    workload-status-message: Vault needs to be initialized
+
+configure:
+  - zaza.openstack.charm_tests.glance.setup.add_lts_image
+  - zaza.openstack.charm_tests.neutron.setup.basic_overcloud_network
+  - zaza.openstack.charm_tests.nova.setup.create_flavors
+  - zaza.openstack.charm_tests.nova.setup.manage_ssh_key
+  - zaza.openstack.charm_tests.keystone.setup.add_demo_user
+  - migrate-ovn:
+    - zaza.openstack.charm_tests.vault.setup.auto_initialize_no_validation
+    - zaza.openstack.charm_tests.glance.setup.add_lts_image
+    - zaza.openstack.charm_tests.neutron.setup.basic_overcloud_network
+    - zaza.openstack.charm_tests.nova.setup.create_flavors
+    - zaza.openstack.charm_tests.nova.setup.manage_ssh_key
+    - zaza.openstack.charm_tests.keystone.setup.add_demo_user
+    - zaza.openstack.charm_tests.ovn.setup.pre_migration_configuration
+
+configure_options:
+  configure_gateway_ext_port_use_juju_wait: false
+
+tests:
+  - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayTest
+  - zaza.openstack.charm_tests.neutron.tests.SecurityTest
+  - zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest
+  - zaza.openstack.charm_tests.neutron.tests.NeutronOvsVsctlTest
+  - migrate-ovn:
+    - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayTest
+    - zaza.openstack.charm_tests.neutron.tests.SecurityTest
+    - zaza.openstack.charm_tests.neutron.tests.NeutronOvsVsctlTest
+    - zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest
+    - zaza.openstack.charm_tests.ovn.tests.OVSOVNMigrationTest
+    - zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest
+
+tests_options:
+  # NOTE: This allows us to run the NeutronNetworkingTest multiple times while
+  # reusing the instances created for the first run. This both saves time and
+  # allows verifying instances survive a SDN migration.
+  zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest.test_instances_have_networking.run_resource_cleanup: false
+  force_deploy:
+    - groovy-victoria

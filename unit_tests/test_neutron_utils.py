@@ -1,4 +1,4 @@
-from mock import MagicMock, call, patch, ANY
+from unittest.mock import MagicMock, call, patch, ANY
 
 import charmhelpers.core.hookenv as hookenv
 import neutron_utils
@@ -25,6 +25,7 @@ TO_PATCH = [
     'add_bridge',
     'add_bridge_port',
     'add_ovsbridge_linuxbridge',
+    'get_bridges_and_ports_map',
     'is_linuxbridge_interface',
     'headers_package',
     'full_restart',
@@ -44,6 +45,7 @@ TO_PATCH = [
     'NeutronAPIContext',
     'enable_ipfix',
     'disable_ipfix',
+    'disable_neutron_lbaas',
 ]
 
 
@@ -152,6 +154,7 @@ class TestNeutronUtils(CharmTestCase):
         self.patch_object(neutron_utils, 'disable_nova_metadata',
                           return_value=False)
         self.config.return_value = 'ovs'
+        self.disable_neutron_lbaas.return_value = False
         self.os_release.return_value = 'newton'
         packages = neutron_utils.get_packages()
         self.assertTrue('neutron-metering-agent' in packages)
@@ -172,6 +175,20 @@ class TestNeutronUtils(CharmTestCase):
             len(packages),
             len([p for p in packages if not p.startswith('python-')])
         )
+        self.assertTrue('python3-neutron-lbaas' in packages)
+
+    def test_get_packages_ovs_train(self):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=True)
+        self.config.return_value = 'ovs'
+        self.os_release.return_value = 'train'
+        packages = neutron_utils.get_packages()
+        self.assertEqual(
+            len(packages),
+            len([p for p in packages if not p.startswith('python-')])
+        )
+        self.assertFalse('python3-neutron-lbaas' in packages)
+        self.assertFalse('neutron-lbaasv2-agent' in packages)
 
     def test_get_purge_packages_ovs(self):
         self.config.return_value = 'ovs'
@@ -192,10 +209,42 @@ class TestNeutronUtils(CharmTestCase):
             neutron_utils.get_purge_packages()
         )
 
+    def test_get_purge_packages_ovs_train(self):
+        self.config.return_value = 'ovs'
+        self.os_release.return_value = 'train'
+        self.assertEqual([
+            'python-mysqldb',
+            'python-psycopg2',
+            'python-oslo.config',
+            'python-nova',
+            'python-neutron',
+            'python-neutron-fwaas',
+            'python-neutron-lbaas',
+            'python3-neutron-lbaas',
+            'neutron-lbaasv2-agent'],
+            neutron_utils.get_purge_packages()
+        )
+
+    def test_get_purge_packages_nsx_train(self):
+        self.config.return_value = 'nsx'
+        self.os_release.return_value = 'train'
+        self.assertEqual([
+            'python-mysqldb',
+            'python-psycopg2',
+            'python-oslo.config',
+            'python-nova',
+            'python-neutron',
+            'python-neutron-fwaas',
+            'python-neutron-lbaas',
+            'python3-neutron-lbaas'],
+            neutron_utils.get_purge_packages()
+        )
+
     def test_get_packages_ovsodl_icehouse(self):
         self.patch_object(neutron_utils, 'disable_nova_metadata',
                           return_value=False)
         self.config.return_value = 'ovs-odl'
+        self.disable_neutron_lbaas.return_value = False
         self.os_release.return_value = 'icehouse'
         packages = neutron_utils.get_packages()
         self.assertTrue('neutron-metering-agent' in packages)
@@ -208,6 +257,7 @@ class TestNeutronUtils(CharmTestCase):
         self.patch_object(neutron_utils, 'disable_nova_metadata',
                           return_value=False)
         self.config.return_value = 'ovs-odl'
+        self.disable_neutron_lbaas.return_value = False
         self.os_release.return_value = 'newton'
         packages = neutron_utils.get_packages()
         self.assertTrue('neutron-metering-agent' in packages)
@@ -248,11 +298,13 @@ class TestNeutronUtils(CharmTestCase):
             DummyExternalPortContext(return_value={'ext_port': 'eth0'})
         neutron_utils.configure_ovs()
         self.add_bridge.assert_has_calls([
-            call('br-int'),
-            call('br-ex'),
-            call('br-data')
+            call('br-int', brdata=ANY),
+            call('br-ex', brdata=ANY),
+            call('br-data', brdata=ANY)
         ])
-        self.add_bridge_port.assert_called_with('br-ex', 'eth0')
+        self.add_bridge_port.assert_called_with(
+            'br-ex', 'eth0', ifdata=ANY, portdata=ANY
+        )
 
     @patch('charmhelpers.contrib.openstack.context.list_nics',
            return_value=['eth0', 'eth0.100', 'eth0.200'])
@@ -269,11 +321,12 @@ class TestNeutronUtils(CharmTestCase):
         self.test_config.set('data-port', 'eth0')
         neutron_utils.configure_ovs()
         self.add_bridge.assert_has_calls([
-            call('br-int'),
-            call('br-ex'),
-            call('br-data')
+            call('br-int', brdata=ANY),
+            call('br-ex', brdata=ANY),
+            call('br-data', brdata=ANY)
         ])
-        calls = [call('br-data', 'eth0', promisc=True)]
+        calls = [call('br-data', 'eth0', promisc=True, ifdata=ANY,
+                      portdata=ANY)]
         self.add_bridge_port.assert_has_calls(calls)
 
         # Now test with bridge:port format and bogus bridge
@@ -282,9 +335,9 @@ class TestNeutronUtils(CharmTestCase):
         self.add_bridge_port.reset_mock()
         neutron_utils.configure_ovs()
         self.add_bridge.assert_has_calls([
-            call('br-int'),
-            call('br-ex'),
-            call('br-data')
+            call('br-int', brdata=ANY),
+            call('br-ex', brdata=ANY),
+            call('br-data', brdata=ANY)
         ])
         # Not called since we have a bogus bridge in data-ports
         self.assertFalse(self.add_bridge_port.called)
@@ -296,12 +349,13 @@ class TestNeutronUtils(CharmTestCase):
         self.add_bridge_port.reset_mock()
         neutron_utils.configure_ovs()
         self.add_bridge.assert_has_calls([
-            call('br-int'),
-            call('br-ex'),
-            call('br1')
+            call('br-int', brdata=ANY),
+            call('br-ex', brdata=ANY),
+            call('br1', brdata=ANY)
         ])
-        calls = [call('br1', 'eth0.100', promisc=True),
-                 call('br1', 'eth0.200', promisc=True)]
+        calls = [
+            call('br1', 'eth0.100', promisc=True, ifdata=ANY, portdata=ANY),
+            call('br1', 'eth0.200', promisc=True, ifdata=ANY, portdata=ANY)]
         self.add_bridge_port.assert_has_calls(calls, any_order=True)
 
     @patch('charmhelpers.contrib.openstack.context.list_nics',
@@ -318,12 +372,23 @@ class TestNeutronUtils(CharmTestCase):
         # assumed)
         self.test_config.set('data-port', 'br-eth0')
         neutron_utils.configure_ovs()
+
+        # Also check that new bridges and ports are marked as managed by us:
+        expected_brdata = {
+            'external-ids': {'charm-neutron-gateway': 'managed'},
+        }
+        expected_ifdata = {
+            'external-ids': {'charm-neutron-gateway': 'br-data'},
+        }
+        expected_portdata = expected_ifdata
+
         self.add_bridge.assert_has_calls([
-            call('br-int'),
-            call('br-ex'),
-            call('br-data')
+            call('br-int', brdata=expected_brdata),
+            call('br-ex', brdata=expected_brdata),
+            call('br-data', brdata=expected_brdata)
         ])
-        calls = [call('br-data', 'br-eth0')]
+        calls = [call('br-data', 'br-eth0', ifdata=expected_ifdata,
+                      portdata=expected_portdata)]
         self.add_ovsbridge_linuxbridge.assert_has_calls(calls)
 
     @patch('charmhelpers.contrib.openstack.context.config')
@@ -338,6 +403,36 @@ class TestNeutronUtils(CharmTestCase):
             call('br-ex', '127.0.0.1:80'),
             call('br-data', '127.0.0.1:80'),
         ])
+
+    @patch.object(neutron_utils, 'DataPortContext')
+    @patch('charmhelpers.contrib.openstack.context.config')
+    def test_configure_ovs_ensure_ext_port_overriden(
+            self, mock_config, mock_data_port_context):
+        mock_config.side_effect = self.test_config.get
+        self.config.side_effect = self.test_config.get
+        self.test_config.set('plugin', 'ovs')
+        self.get_bridges_and_ports_map.return_value = {
+            'br-data': ['p4', 'p5'],
+            'br1': ['p6'],
+        }
+        self.test_config.set(
+            'data-port',
+            'br-data:p4 br-data:p5 br1:p6')
+        self.test_config.set('bridge-mappings', 'net0:br-data net1:br1')
+        self.test_config.set('ext-port', None)
+        self.ExternalPortContext.return_value = \
+            DummyExternalPortContext(return_value={'ext_port': 'eth0'})
+        mock_data_port_context.return_value = \
+            DummyDataPortContext(return_value={
+                'p4': 'br-data',
+                'p5': 'br-data',
+                'p6': 'br1',
+            })
+        self.is_linuxbridge_interface.return_value = False
+        neutron_utils.configure_ovs()
+        # Ensure that ext-port was ignored.
+        self.assertNotIn(call('br-ex', 'eth0', ifdata=ANY, portdata=ANY),
+                         self.add_bridge_port.call_args_list)
 
     @patch.object(neutron_utils, 'register_configs')
     @patch('charmhelpers.contrib.openstack.templating.OSConfigRenderer')
@@ -468,6 +563,7 @@ class TestNeutronUtils(CharmTestCase):
         self.patch_object(neutron_utils, 'disable_nova_metadata',
                           return_value=False)
         self.config.return_value = 'ovs'
+        self.disable_neutron_lbaas.return_value = False
         self.get_os_codename_install_source.return_value = 'havana'
         mock_get_packages.return_value = ['neutron-vpn-agent']
         self.os_release.return_value = 'icehouse'
@@ -515,6 +611,7 @@ class TestNeutronUtils(CharmTestCase):
         self.patch_object(neutron_utils, 'disable_nova_metadata',
                           return_value=False)
         self.config.return_value = 'ovs'
+        self.disable_neutron_lbaas.return_value = False
         mock_get_packages.return_value = ['neutron-vpn-agent']
         self.os_release.return_value = 'mitaka'
         ex_map = {
@@ -560,6 +657,7 @@ class TestNeutronUtils(CharmTestCase):
         self.patch_object(neutron_utils, 'disable_nova_metadata',
                           return_value=False)
         self.config.return_value = 'ovs'
+        self.disable_neutron_lbaas.return_value = False
         mock_get_packages.return_value = ['neutron-vpn-agent']
         self.os_release.return_value = 'newton'
         ex_map = {
@@ -601,6 +699,87 @@ class TestNeutronUtils(CharmTestCase):
         self.assertEqual(neutron_utils.restart_map(), ex_map)
 
     @patch.object(neutron_utils, 'get_packages')
+    def test_restart_map_ovs_stein_disable_lbaas(self, mock_get_packages):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
+        self.config.return_value = 'ovs'
+        self.disable_neutron_lbaas.return_value = True
+        mock_get_packages.return_value = ['neutron-vpn-agent']
+        self.os_release.return_value = 'stein'
+        ex_map = {
+            neutron_utils.NEUTRON_CONF: ['neutron-vpn-agent',
+                                         'neutron-dhcp-agent',
+                                         'neutron-metering-agent',
+                                         'neutron-metadata-agent',
+                                         'neutron-openvswitch-agent'],
+            neutron_utils.NEUTRON_DNSMASQ_CONF: ['neutron-dhcp-agent'],
+            neutron_utils.NEUTRON_OVS_AGENT_CONF:
+            ['neutron-openvswitch-agent'],
+            neutron_utils.NEUTRON_METADATA_AGENT_CONF:
+            ['neutron-metadata-agent'],
+            neutron_utils.NEUTRON_VPNAAS_AGENT_CONF: ['neutron-vpn-agent'],
+            neutron_utils.NEUTRON_L3_AGENT_CONF: ['neutron-vpn-agent'],
+            neutron_utils.NEUTRON_DHCP_AGENT_CONF: ['neutron-dhcp-agent'],
+            neutron_utils.NEUTRON_FWAAS_CONF: ['neutron-vpn-agent'],
+            neutron_utils.NEUTRON_METERING_AGENT_CONF:
+            ['neutron-metering-agent'],
+            neutron_utils.NOVA_CONF: ['nova-api-metadata'],
+            neutron_utils.EXT_PORT_CONF: ['ext-port'],
+            neutron_utils.PHY_NIC_MTU_CONF: ['os-charm-phy-nic-mtu'],
+            neutron_utils.NEUTRON_DHCP_AA_PROFILE_PATH: ['neutron-dhcp-agent'],
+            neutron_utils.NEUTRON_OVS_AA_PROFILE_PATH:
+                ['neutron-openvswitch-agent'],
+            neutron_utils.NEUTRON_L3_AA_PROFILE_PATH: ['neutron-vpn-agent'],
+            neutron_utils.NEUTRON_METADATA_AA_PROFILE_PATH:
+            ['neutron-metadata-agent'],
+            neutron_utils.NEUTRON_METERING_AA_PROFILE_PATH:
+            ['neutron-metering-agent'],
+            neutron_utils.NOVA_API_METADATA_AA_PROFILE_PATH:
+            ['nova-api-metadata'],
+        }
+        self.assertEqual(neutron_utils.restart_map(), ex_map)
+
+    @patch.object(neutron_utils, 'get_packages')
+    def test_restart_map_ovs_train(self, mock_get_packages):
+        self.patch_object(neutron_utils, 'disable_nova_metadata',
+                          return_value=False)
+        self.config.return_value = 'ovs'
+        mock_get_packages.return_value = ['neutron-vpn-agent']
+        self.os_release.return_value = 'train'
+        ex_map = {
+            neutron_utils.NEUTRON_CONF: ['neutron-vpn-agent',
+                                         'neutron-dhcp-agent',
+                                         'neutron-metering-agent',
+                                         'neutron-metadata-agent',
+                                         'neutron-openvswitch-agent'],
+            neutron_utils.NEUTRON_DNSMASQ_CONF: ['neutron-dhcp-agent'],
+            neutron_utils.NEUTRON_OVS_AGENT_CONF:
+            ['neutron-openvswitch-agent'],
+            neutron_utils.NEUTRON_METADATA_AGENT_CONF:
+            ['neutron-metadata-agent'],
+            neutron_utils.NEUTRON_VPNAAS_AGENT_CONF: ['neutron-vpn-agent'],
+            neutron_utils.NEUTRON_L3_AGENT_CONF: ['neutron-vpn-agent'],
+            neutron_utils.NEUTRON_DHCP_AGENT_CONF: ['neutron-dhcp-agent'],
+            neutron_utils.NEUTRON_FWAAS_CONF: ['neutron-vpn-agent'],
+            neutron_utils.NEUTRON_METERING_AGENT_CONF:
+            ['neutron-metering-agent'],
+            neutron_utils.NOVA_CONF: ['nova-api-metadata'],
+            neutron_utils.EXT_PORT_CONF: ['ext-port'],
+            neutron_utils.PHY_NIC_MTU_CONF: ['os-charm-phy-nic-mtu'],
+            neutron_utils.NEUTRON_DHCP_AA_PROFILE_PATH: ['neutron-dhcp-agent'],
+            neutron_utils.NEUTRON_OVS_AA_PROFILE_PATH:
+                ['neutron-openvswitch-agent'],
+            neutron_utils.NEUTRON_L3_AA_PROFILE_PATH: ['neutron-vpn-agent'],
+            neutron_utils.NEUTRON_METADATA_AA_PROFILE_PATH:
+            ['neutron-metadata-agent'],
+            neutron_utils.NEUTRON_METERING_AA_PROFILE_PATH:
+            ['neutron-metering-agent'],
+            neutron_utils.NOVA_API_METADATA_AA_PROFILE_PATH:
+            ['nova-api-metadata'],
+        }
+        self.assertEqual(neutron_utils.restart_map(), ex_map)
+
+    @patch.object(neutron_utils, 'get_packages')
     def test_restart_map_ovs_post_trusty(self, mock_get_packages):
         self.patch_object(neutron_utils, 'disable_nova_metadata',
                           return_value=False)
@@ -617,6 +796,7 @@ class TestNeutronUtils(CharmTestCase):
         self.patch_object(neutron_utils, 'disable_nova_metadata',
                           return_value=False)
         self.config.return_value = 'ovs-odl'
+        self.disable_neutron_lbaas.return_value = False
         mock_get_packages.return_value = ['neutron-vpn-agent']
         self.os_release.return_value = 'icehouse'
         ex_map = {
@@ -656,6 +836,7 @@ class TestNeutronUtils(CharmTestCase):
     def test_restart_map_ovs_odl_newton(self, mock_get_packages):
         self.patch_object(neutron_utils, 'disable_nova_metadata',
                           return_value=False)
+        self.disable_neutron_lbaas.return_value = False
         self.config.return_value = 'ovs-odl'
         mock_get_packages.return_value = ['neutron-vpn-agent']
         self.os_release.return_value = 'newton'
@@ -812,6 +993,7 @@ class TestNeutronUtils(CharmTestCase):
         self._set_distrib_codename('trusty')
         self.os_release.return_value = 'mitaka'
         self.is_relation_made = False
+        self.disable_neutron_lbaas.return_value = False
         actual_map = neutron_utils.resolve_config_files(neutron_utils.OVS,
                                                         'mitaka')
         actual_configs = actual_map[neutron_utils.OVS].keys()
@@ -851,72 +1033,6 @@ class TestNeutronUtils(CharmTestCase):
         for config in EXC_CONFIG:
             self.assertTrue(config not in actual_configs)
 
-    @patch.object(neutron_utils.os.environ, 'get')
-    def test_get_az_customize_with_env(self, os_environ_get_mock):
-        self.config.side_effect = self.test_config.get
-        self.test_config.set('customize-failure-domain', True)
-        self.test_config.set('default-availability-zone', 'nova')
-
-        def os_environ_get_side_effect(key):
-            return {
-                'JUJU_AVAILABILITY_ZONE': 'az1',
-            }[key]
-        os_environ_get_mock.side_effect = os_environ_get_side_effect
-        az = neutron_utils.get_availability_zone()
-        self.assertEqual('az1', az)
-
-    @patch.object(neutron_utils.os.environ, 'get')
-    def test_get_az_customize_without_env(self, os_environ_get_mock):
-        self.config.side_effect = self.test_config.get
-        self.test_config.set('customize-failure-domain', True)
-        self.test_config.set('default-availability-zone', 'mynova')
-
-        def os_environ_get_side_effect(key):
-            return {
-                'JUJU_AVAILABILITY_ZONE': '',
-            }[key]
-        os_environ_get_mock.side_effect = os_environ_get_side_effect
-        az = neutron_utils.get_availability_zone()
-        self.assertEqual('mynova', az)
-
-    @patch.object(neutron_utils.os.environ, 'get')
-    def test_get_az_no_customize_without_env(self, os_environ_get_mock):
-        self.config.side_effect = self.test_config.get
-        self.test_config.set('customize-failure-domain', False)
-        self.test_config.set('default-availability-zone', 'nova')
-
-        def os_environ_get_side_effect(key):
-            return {
-                'JUJU_AVAILABILITY_ZONE': '',
-            }[key]
-        os_environ_get_mock.side_effect = os_environ_get_side_effect
-        az = neutron_utils.get_availability_zone()
-        self.assertEqual('nova', az)
-
-    @patch.object(neutron_utils.os.environ, 'get')
-    def test_get_az_no_customize_with_env(self, os_environ_get_mock):
-        self.config.side_effect = self.test_config.get
-        self.test_config.set('customize-failure-domain', False)
-        self.test_config.set('default-availability-zone', 'nova')
-
-        def os_environ_get_side_effect(key):
-            return {
-                'JUJU_AVAILABILITY_ZONE': 'az1',
-            }[key]
-        os_environ_get_mock.side_effect = os_environ_get_side_effect
-        az = neutron_utils.get_availability_zone()
-        self.assertEqual('nova', az)
-
-network_context = {
-    'service_username': 'foo',
-    'service_password': 'bar',
-    'service_tenant': 'baz',
-    'region': 'foo-bar',
-    'keystone_host': 'keystone',
-    'auth_port': 5000,
-    'auth_protocol': 'https'
-}
-
 
 class DummyNetworkServiceContext():
 
@@ -928,6 +1044,15 @@ class DummyNetworkServiceContext():
 
 
 class DummyExternalPortContext():
+
+    def __init__(self, return_value):
+        self.return_value = return_value
+
+    def __call__(self):
+        return self.return_value
+
+
+class DummyDataPortContext():
 
     def __init__(self, return_value):
         self.return_value = return_value
@@ -965,7 +1090,7 @@ class TestNeutronAgentReallocation(CharmTestCase):
             )
 
     @patch.object(neutron_utils, 'get_optional_interfaces')
-    @patch.object(neutron_utils, 'check_optional_relations')
+    @patch.object(neutron_utils, 'sequence_functions')
     @patch.object(neutron_utils, 'REQUIRED_INTERFACES')
     @patch.object(neutron_utils, 'services')
     @patch.object(neutron_utils, 'make_assess_status_func')
@@ -973,17 +1098,21 @@ class TestNeutronAgentReallocation(CharmTestCase):
                                 make_assess_status_func,
                                 services,
                                 REQUIRED_INTERFACES,
-                                check_optional_relations,
+                                sequence_functions,
                                 get_optional_interfaces):
         services.return_value = ['s1']
         REQUIRED_INTERFACES.copy.return_value = {'int': ['test 1']}
         get_optional_interfaces.return_value = {'opt': ['test 2']}
+        sequence_functions.return_value = 'sequence_return'
         neutron_utils.assess_status_func('test-config')
         # ports=None whilst port checks are disabled.
         make_assess_status_func.assert_called_once_with(
             'test-config',
             {'int': ['test 1'], 'opt': ['test 2']},
-            charm_func=check_optional_relations, services=['s1'], ports=None)
+            charm_func='sequence_return', services=['s1'], ports=None)
+        sequence_functions.assert_called_once_with(
+            neutron_utils.check_optional_relations,
+            neutron_utils.check_ext_port_data_port_config)
 
     def test_pause_unit_helper(self):
         with patch.object(neutron_utils, '_pause_resume_helper') as prh:
@@ -1048,3 +1177,11 @@ class TestNeutronAgentReallocation(CharmTestCase):
         context.AppArmorContext.assert_any_call(
             neutron_utils.NEUTRON_LBAASV2_AA_PROFILE
         )
+
+    @patch.object(neutron_utils, 'disable_nova_metadata')
+    def test_deprecated_services(self, disable_nova_metadata):
+        self.os_release.return_value = 'train'
+        disable_nova_metadata.return_value = True
+        self.assertEqual(neutron_utils.deprecated_services(),
+                         ['nova-api-metadata',
+                          'neutron-lbaasv2-agent'])

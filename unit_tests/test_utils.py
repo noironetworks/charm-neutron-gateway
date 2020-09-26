@@ -1,10 +1,13 @@
+import contextlib
+import io
 import os
 import logging
 
 import unittest
 import yaml
 
-from mock import patch
+import unittest.mock as mock
+from unittest.mock import patch
 
 
 def load_config():
@@ -57,14 +60,21 @@ class CharmTestCase(unittest.TestCase):
         self._patches_start = {}
 
     def patch(self, method):
-        _m = patch.object(self.obj, method)
+        if "." in method:
+            _m = patch(method)
+        else:
+            _m = patch.object(self.obj, method)
         mock = _m.start()
         self.addCleanup(_m.stop)
         return mock
 
     def patch_all(self):
         for method in self.patches:
-            setattr(self, method, self.patch(method))
+            if "." in method:
+                attr = method.split('.')[-1]
+            else:
+                attr = method
+            setattr(self, attr, self.patch(method))
 
     def tearDown(self):
         for k, v in self._patches.items():
@@ -85,7 +95,10 @@ class CharmTestCase(unittest.TestCase):
         :param name: optional <string> name to call the mock.
         :param **kwargs: any other args to pass to mock.patch()
         """
-        mocked = patch.object(obj, attr, **kwargs)
+        if obj is None:
+            mocked = patch(attr, **kwargs)
+        else:
+            mocked = patch.object(obj, attr, **kwargs)
         if name is None:
             name = attr
         started = mocked.start()
@@ -128,3 +141,21 @@ class TestRelation(object):
         elif attr in self.relation_data:
             return self.relation_data[attr]
         return None
+
+
+@contextlib.contextmanager
+def patch_open():
+    """Patch open() to allow mocking both open() itself and the file that is
+    yielded.
+
+    Yields the mock for "open" and "file", respectively."""
+    mock_open = mock.MagicMock(spec=open)
+    mock_file = mock.MagicMock(spec=io.FileIO)
+
+    @contextlib.contextmanager
+    def stub_open(*args, **kwargs):
+        mock_open(*args, **kwargs)
+        yield mock_file
+
+    with patch('builtins.open', stub_open):
+        yield mock_open, mock_file
