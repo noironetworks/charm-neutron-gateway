@@ -1,6 +1,6 @@
 import sys
-import mock
-from mock import patch, MagicMock
+from unittest import mock
+from unittest.mock import MagicMock
 
 from test_utils import CharmTestCase
 
@@ -9,24 +9,20 @@ from test_utils import CharmTestCase
 sys.modules['apt'] = MagicMock()
 sys.modules['apt_pkg'] = MagicMock()
 
-with patch('charmhelpers.core.hookenv.config'):
-    with patch('neutron_utils.restart_map'):
-        with patch('neutron_utils.register_configs') as configs:
-            with patch('charmhelpers.contrib.hardening.harden.harden') as \
-                    mock_dec:
-                mock_dec.side_effect = (lambda *dargs, **dkwargs: lambda f:
-                                        lambda *args, **kwargs:
-                                            f(*args, **kwargs))
-                with patch('charmhelpers.core.hookenv.status_set'):
-                    configs.return_value = 'test-config'
-                    import actions
+import actions
 
 
 class PauseTestCase(CharmTestCase):
 
     def setUp(self):
         super(PauseTestCase, self).setUp(
-            actions, ["pause_unit_helper"])
+            actions, ["pause_unit_helper",
+                      "charmhelpers.core.hookenv.log",
+                      "charmhelpers.core.hookenv.status_set",
+                      "charmhelpers.core.hookenv.config"])
+        self.patch_object(None, "actions.register_configs",
+                          name="register_configs",
+                          return_value='test-config')
 
     def test_pauses_services(self):
         actions.pause([])
@@ -37,9 +33,15 @@ class ResumeTestCase(CharmTestCase):
 
     def setUp(self):
         super(ResumeTestCase, self).setUp(
-            actions, ["resume_unit_helper"])
+            actions, ["resume_unit_helper",
+                      "charmhelpers.core.hookenv.log",
+                      "charmhelpers.core.hookenv.status_set",
+                      "charmhelpers.core.hookenv.config"])
+        self.patch_object(None, "actions.register_configs",
+                          name="register_configs",
+                          return_value='test-config')
 
-    def test_pauses_services(self):
+    def test_resumes_services(self):
         actions.resume([])
         self.resume_unit_helper.assert_called_once_with('test-config')
 

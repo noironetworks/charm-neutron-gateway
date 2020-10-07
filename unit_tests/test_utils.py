@@ -4,7 +4,7 @@ import logging
 import unittest
 import yaml
 
-from mock import patch
+from unittest.mock import patch
 
 
 def load_config():
@@ -57,14 +57,21 @@ class CharmTestCase(unittest.TestCase):
         self._patches_start = {}
 
     def patch(self, method):
-        _m = patch.object(self.obj, method)
+        if "." in method:
+            _m = patch(method)
+        else:
+            _m = patch.object(self.obj, method)
         mock = _m.start()
         self.addCleanup(_m.stop)
         return mock
 
     def patch_all(self):
         for method in self.patches:
-            setattr(self, method, self.patch(method))
+            if "." in method:
+                attr = method.split('.')[-1]
+            else:
+                attr = method
+            setattr(self, attr, self.patch(method))
 
     def tearDown(self):
         for k, v in self._patches.items():
@@ -85,7 +92,10 @@ class CharmTestCase(unittest.TestCase):
         :param name: optional <string> name to call the mock.
         :param **kwargs: any other args to pass to mock.patch()
         """
-        mocked = patch.object(obj, attr, **kwargs)
+        if obj is None:
+            mocked = patch(attr, **kwargs)
+        else:
+            mocked = patch.object(obj, attr, **kwargs)
         if name is None:
             name = attr
         started = mocked.start()

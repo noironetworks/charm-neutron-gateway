@@ -49,7 +49,7 @@
 
   /proc/version r,
 
-  # neutron-dhcp-agent needs to keep track of dnsmaq processes
+  # neutron-dhcp-agent needs to keep track of dnsmasq processes
   /proc/*/stat r,
 
 {% if ubuntu_release <= '12.04' %}
