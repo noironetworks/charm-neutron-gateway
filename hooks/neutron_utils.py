@@ -73,7 +73,7 @@ from charmhelpers.contrib.openstack.context import (
 import charmhelpers.contrib.openstack.templating as templating
 from charmhelpers.contrib.openstack.neutron import headers_package
 from neutron_contexts import (
-    CORE_PLUGIN, OVS, NSX, N1KV, OVS_ODL,
+    CORE_PLUGIN, OVS, NSX, N1KV, OVS_ODL, ACI,
     NeutronGatewayContext,
     L3AgentContext,
     NovaMetadataContext,
@@ -183,6 +183,15 @@ GATEWAY_PKGS = {
         "neutron-metering-agent",
         "neutron-lbaas-agent",
     ],
+    ACI: [
+        "openvswitch-switch",
+        "neutron-dhcp-agent",
+        'python-mysqldb',
+        'python-psycopg2',
+        'python-oslo.config',  # Force upgrade
+        "nova-api-metadata",
+        "neutron-metering-agent",
+    ],
 }
 
 PURGE_PACKAGES = [
@@ -208,6 +217,7 @@ EARLY_PACKAGES = {
     NSX: [],
     N1KV: [],
     OVS_ODL: [],
+    ACI: ['openvswitch-datapath-dkms'],
 }
 
 LEGACY_HA_TEMPLATE_FILES = 'files'
@@ -599,15 +609,32 @@ def get_config_files():
     }
     NEUTRON_N1KV_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
 
+    NEUTRON_ACI_CONFIG_FILES = {
+        NEUTRON_CONF: {
+            'hook_contexts': [context.AMQPContext(ssl_dir=NEUTRON_CONF_DIR),
+                              NeutronGatewayContext(),
+                              context.WorkerConfigContext(),
+                              SyslogContext()],
+            'services': ['neutron-dhcp-agent',
+                         'neutron-metadata-agent']
+        },
+        NEUTRON_ML2_PLUGIN_CONF: {
+            'hook_contexts': [NeutronGatewayContext()],
+            'services': ['neutron-dhcp-agent', 'opflex-agent',
+                         'neutron-opflex-agent']
+        },
+    }
+    NEUTRON_ACI_CONFIG_FILES.update(NEUTRON_SHARED_CONFIG_FILES)
+
     __CONFIG_FILES = {
         NSX: NEUTRON_NSX_CONFIG_FILES,
         OVS: NEUTRON_OVS_CONFIG_FILES,
         N1KV: NEUTRON_N1KV_CONFIG_FILES,
-        OVS_ODL: NEUTRON_OVS_ODL_CONFIG_FILES
+        OVS_ODL: NEUTRON_OVS_ODL_CONFIG_FILES,
+        ACI: NEUTRON_ACI_CONFIG_FILES
     }
 
     return __CONFIG_FILES
-
 
 SERVICE_RENAMES = {
     'icehouse': {
@@ -666,7 +693,7 @@ def resolve_config_files(plugin, release):
     config_files = deepcopy(get_config_files())
     drop_config = []
     cmp_os_release = CompareOpenStackReleases(release)
-    if plugin == OVS:
+    if plugin == OVS or plugin == ACI:
         # NOTE: deal with switch to ML2 plugin for >= icehouse
         drop_config = [NEUTRON_OVS_AGENT_CONF]
         if cmp_os_release >= 'mitaka':
@@ -775,6 +802,12 @@ def restart_map(release=None):
         if cmp_release >= 'newton' and 'neutron-lbaas-agent' in svcs:
             svcs.remove('neutron-lbaas-agent')
             svcs.add('neutron-lbaasv2-agent')
+        if plugin == "aci" and 'neutron-metadata-agent' in svcs:
+            svcs.remove('neutron-metadata-agent')
+        if plugin == "aci" and 'neutron-lbaas-agent' in svcs:
+            svcs.remove('neutron-lbaas-agent')
+        if plugin == "aci" and 'neutron-lbaasv2-agent' in svcs:
+            svcs.remove('neutron-lbaasv2-agent')
         if cmp_release >= 'train' and 'neutron-lbaasv2-agent' in svcs:
             svcs.remove('neutron-lbaasv2-agent')
         if disable_neutron_lbaas():
