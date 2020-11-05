@@ -9,6 +9,8 @@ smoke_bundles:
   - migrate-ovn: focal-ussuri
 
 gate_bundles:
+  - migrate-ovn: groovy-victoria
+  - migrate-ovn: focal-victoria
   - migrate-ovn: focal-ussuri
   - bionic-ussuri
   - bionic-train
@@ -20,11 +22,6 @@ gate_bundles:
   - xenial-ocata
   - xenial-mitaka
   - trusty-mitaka
-
-dev_bundles:
-  # Pending new Victoria snapshot that includes fix for LP: #1887781
-  - migrate-ovn: focal-victoria
-  - migrate-ovn: groovy-victoria
 
 target_deploy_status:
   neutron-api-plugin-ovn:
