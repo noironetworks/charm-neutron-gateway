@@ -990,6 +990,8 @@ def remove_legacy_neutron_lbaas():
 
 def disable_nova_metadata(cmp_os_source=None):
     """Check whether nova metadata service should be disabled."""
+    if config('plugin') == 'aci':
+        return False
     if not cmp_os_source:
         cmp_os_source = CompareOpenStackReleases(os_release('neutron-common'))
     if cmp_os_source >= 'rocky':
