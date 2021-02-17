@@ -8,6 +8,7 @@ from charmhelpers.core.hookenv import (
     relation_get,
     relation_set,
     relation_ids,
+    related_units,
     Hooks,
     unit_get,
     UnregisteredHookError,
@@ -46,6 +47,11 @@ from charmhelpers.core.kernel import modprobe
 
 from charmhelpers.contrib.charmsupport import nrpe
 from charmhelpers.contrib.hardening.harden import harden
+
+from charmhelpers.contrib.openstack.utils import (
+    os_release,
+    CompareOpenStackReleases,
+)
 
 import sys
 
@@ -272,6 +278,18 @@ def neutron_plugin_api_changed():
 @hooks.hook('quantum-network-service-relation-changed')
 @restart_on_change(restart_map)
 def nm_changed():
+    cmp_os_release = CompareOpenStackReleases(os_release('neutron-common'))
+    if cmp_os_release >= 'rocky':
+        for rid in relation_ids('quantum-network-service'):
+            for unit in related_units(rid):
+                rdata = relation_get(rid=rid, unit=unit)
+                secret = rdata.get('shared-metadata-secret')
+                if secret:
+                    settings = {}
+                    settings['metadata_shared_secret'] = secret
+                    settings['metadata_ip'] = get_host_ip(unit_get('private-address'))
+                    relation_set(relation_id=rid, **settings)
+
     CONFIGS.write_all()
     if relation_get('ca_cert'):
         ca_crt = b64decode(relation_get('ca_cert'))
@@ -385,10 +403,18 @@ def ha_relation_destroyed():
 
 @hooks.hook('quantum-network-service-relation-joined')
 def qns_joined(relation_id=None):
+    cmp_os_release = CompareOpenStackReleases(os_release('neutron-common'))
     settings = {}
-    settings['metadata_shared_secret'] = get_shared_secret()
     settings['metadata_ip'] = get_host_ip(unit_get('private-address'))
-
+    if cmp_os_release < 'rocky':
+        settings['metadata_shared_secret'] = get_shared_secret()
+    else:
+        for rid in relation_ids('quantum-network-service'):
+            for unit in related_units(rid):
+                rdata = relation_get(rid=rid, unit=unit)
+                secret = rdata.get('shared-metadata-secret')
+                if secret:
+                    settings['metadata_shared_secret'] = secret
     relation_set(relation_id=relation_id, **settings)
 
 

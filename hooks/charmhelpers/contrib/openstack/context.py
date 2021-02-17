@@ -61,6 +61,7 @@ from charmhelpers.core.hookenv import (
 from charmhelpers.core.sysctl import create as sysctl_create
 from charmhelpers.core.strutils import bool_from_string
 from charmhelpers.contrib.openstack.exceptions import OSContextError
+from charmhelpers.contrib.openstack import context, templating
 
 from charmhelpers.core.host import (
     get_bond_master,
@@ -2356,6 +2357,11 @@ class DHCPAgentContext(OSContextGenerator):
 
         ctxt['enable_metadata_network'] = config('enable-metadata-network')
         ctxt['enable_isolated_metadata'] = config('enable-isolated-metadata')
+
+        myrelease = os_release('neutron-common')
+        if CompareOpenStackReleases(myrelease) > 'train':
+            host_info = context.HostInfoContext()()
+            ctxt['host_fqdn'] = host_info.get('host_fqdn')
 
         if neutron_api_settings.get('dns_domain'):
             ctxt['dns_domain'] = neutron_api_settings.get('dns_domain')
