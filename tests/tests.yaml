@@ -15,13 +15,15 @@ gate_bundles:
   - bionic-ussuri
   - bionic-train
   - bionic-stein
-  - bionic-rocky
   - bionic-queens
-  - xenial-queens
-  - xenial-pike
-  - xenial-ocata
   - xenial-mitaka
+
+dev_bundles:
   - trusty-mitaka
+  - xenial-ocata
+  - xenial-pike
+  - xenial-queens
+  - bionic-rocky
 
 target_deploy_status:
   neutron-api-plugin-ovn:
