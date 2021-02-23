@@ -1,5 +1,5 @@
 variables:
-  openstack-origin: &openstack-origin distro-proposed
+  openstack-origin: &openstack-origin distro
 
 series: &series focal
 
