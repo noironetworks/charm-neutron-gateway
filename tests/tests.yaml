@@ -10,6 +10,7 @@ smoke_bundles:
 
 gate_bundles:
   - migrate-ovn: groovy-victoria
+  - migrate-ovn: focal-wallaby
   - migrate-ovn: focal-victoria
   - migrate-ovn: focal-ussuri
   - bionic-ussuri
@@ -24,6 +25,7 @@ dev_bundles:
   - xenial-pike
   - xenial-queens
   - bionic-rocky
+  - migrate-ovn: hirsute-wallaby
 
 target_deploy_status:
   neutron-api-plugin-ovn:
@@ -82,4 +84,4 @@ tests_options:
   # allows verifying instances survive a SDN migration.
   zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest.test_instances_have_networking.run_resource_cleanup: false
   force_deploy:
-    - groovy-victoria
+    - hirsute-wallaby
