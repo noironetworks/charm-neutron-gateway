@@ -275,8 +275,11 @@ class TestNeutronUtils(CharmTestCase):
         self.os_release.return_value = 'juno'
         self.assertTrue('keepalived' in neutron_utils.get_packages())
 
+    @patch('charmhelpers.contrib.network.ovs.charm_name')
     @patch('charmhelpers.contrib.openstack.context.config')
-    def test_configure_ovs_starts_service_if_required(self, mock_config):
+    def test_configure_ovs_starts_service_if_required(
+            self, mock_config, charm_name):
+        charm_name.return_value = "neutron-gateway"
         mock_config.side_effect = self.test_config.get
         self.config.return_value = 'ovs'
         self.service_running.return_value = False
@@ -288,8 +291,10 @@ class TestNeutronUtils(CharmTestCase):
         neutron_utils.configure_ovs()
         self.assertFalse(self.full_restart.called)
 
+    @patch('charmhelpers.contrib.network.ovs.charm_name')
     @patch('charmhelpers.contrib.openstack.context.config')
-    def test_configure_ovs_ovs_ext_port(self, mock_config):
+    def test_configure_ovs_ovs_ext_port(self, mock_config, charm_name):
+        charm_name.return_value = "neutron-gateway"
         mock_config.side_effect = self.test_config.get
         self.config.side_effect = self.test_config.get
         self.test_config.set('plugin', 'ovs')
@@ -308,8 +313,10 @@ class TestNeutronUtils(CharmTestCase):
 
     @patch('charmhelpers.contrib.openstack.context.list_nics',
            return_value=['eth0', 'eth0.100', 'eth0.200'])
+    @patch('charmhelpers.contrib.network.ovs.charm_name')
     @patch('charmhelpers.contrib.openstack.context.config')
-    def test_configure_ovs_ovs_data_port(self, mock_config, _nics):
+    def test_configure_ovs_ovs_data_port(self, mock_config, charm_name, _nics):
+        charm_name.return_value = "neutron-gateway"
         self.is_linuxbridge_interface.return_value = False
         mock_config.side_effect = self.test_config.get
         self.config.side_effect = self.test_config.get
@@ -360,8 +367,11 @@ class TestNeutronUtils(CharmTestCase):
 
     @patch('charmhelpers.contrib.openstack.context.list_nics',
            return_value=['br-eth0'])
+    @patch('charmhelpers.contrib.network.ovs.charm_name')
     @patch('charmhelpers.contrib.openstack.context.config')
-    def test_configure_ovs_ovs_data_port_bridge(self, mock_config, _nics):
+    def test_configure_ovs_ovs_data_port_bridge(
+            self, mock_config, charm_name, _nics):
+        charm_name.return_value = "neutron-gateway"
         self.is_linuxbridge_interface.return_value = True
         mock_config.side_effect = self.test_config.get
         self.config.side_effect = self.test_config.get
@@ -391,8 +401,10 @@ class TestNeutronUtils(CharmTestCase):
                       portdata=expected_portdata)]
         self.add_ovsbridge_linuxbridge.assert_has_calls(calls)
 
+    @patch('charmhelpers.contrib.network.ovs.charm_name')
     @patch('charmhelpers.contrib.openstack.context.config')
-    def test_configure_ovs_enable_ipfix(self, mock_config):
+    def test_configure_ovs_enable_ipfix(self, mock_config, charm_name):
+        charm_name.return_value = "neutron-gateway"
         mock_config.side_effect = self.test_config.get
         self.config.side_effect = self.test_config.get
         self.test_config.set('plugin', 'ovs')
@@ -405,9 +417,11 @@ class TestNeutronUtils(CharmTestCase):
         ])
 
     @patch.object(neutron_utils, 'DataPortContext')
+    @patch('charmhelpers.contrib.network.ovs.charm_name')
     @patch('charmhelpers.contrib.openstack.context.config')
     def test_configure_ovs_ensure_ext_port_overriden(
-            self, mock_config, mock_data_port_context):
+            self, mock_config, charm_name, mock_data_port_context):
+        charm_name.return_value = "neutron-gateway"
         mock_config.side_effect = self.test_config.get
         self.config.side_effect = self.test_config.get
         self.test_config.set('plugin', 'ovs')
@@ -1090,7 +1104,7 @@ class TestNeutronAgentReallocation(CharmTestCase):
             )
 
     @patch.object(neutron_utils, 'get_optional_interfaces')
-    @patch.object(neutron_utils, 'sequence_functions')
+    @patch.object(neutron_utils, 'sequence_status_check_functions')
     @patch.object(neutron_utils, 'REQUIRED_INTERFACES')
     @patch.object(neutron_utils, 'services')
     @patch.object(neutron_utils, 'make_assess_status_func')
