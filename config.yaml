@@ -94,16 +94,24 @@ options:
     type: string
     default:
     description: |
-      Space-delimited list of bridge:port mappings. Ports will be added to
-      their corresponding bridge. The bridges will allow usage of flat or
-      VLAN network types with Neutron and should match this defined in
-      bridge-mappings.
+      Space-delimited list of bridge:port mappings. Specified ports will be
+      added to their corresponding specified bridge. The bridges will allow
+      usage of flat or VLAN network types with Neutron and should match this
+      defined in bridge-mappings.
       .
-      Ports provided can be the name or MAC address of the interface to be
-      added to the bridge. If MAC addresses are used, you may provide multiple
-      bridge:mac for the same bridge so as to be able to configure multiple
-      units. In this case the charm will run through the provided MAC addresses
-      for each bridge until it finds one it can resolve to an interface name.
+      Ports can be specified through the name or MAC address of the interface
+      to be added to the bridge. If MAC addresses are used, you may provide
+      multiple bridge:mac for the same bridge so as to be able to configure
+      multiple units. In this case the charm will run through the provided MAC
+      addresses for each bridge until it finds one it can resolve to an
+      interface name.
+      .
+      Any changes (subsequent to the initial setting) made to the value of this
+      option will merely add the new values along with the existing ones. If
+      removal of old values is desired, they have to be done manually through
+      the command "ovs-vsctl" in the affected units. If the new values conflict
+      with the previous ones, it may cause a network outage as seen in bug
+      https://pad.lv/1915967
   run-internal-router:
     type: string
     default: all
