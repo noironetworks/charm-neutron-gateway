@@ -49,5 +49,11 @@ run-deferred-hooks:
     .
     NOTE: Service will be restarted as needed irrespective of enable-auto-restarts
 show-deferred-events:
-    descrpition: |
+    description: |
         Show the outstanding restarts
+show-routers:
+  description: Shows a list of routers hosted on the neutron-gateway unit.
+show-dhcp-networks:
+  description: Shows a list of DHCP networks hosted on the neutron-gateway unit.
+show-loadbalancers:
+  description: Shows a list of LBaasV2 load-balancers hosted on the neutron-gateway unit.
