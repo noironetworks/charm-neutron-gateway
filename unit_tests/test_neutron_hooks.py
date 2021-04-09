@@ -50,7 +50,7 @@ TO_PATCH = [
     'stop_neutron_ha_monitor_daemon',
     'use_l3ha',
     'kv',
-    'service_restart',
+    'deferrable_svc_restart',
     'install_systemd_override',
     'configure_apparmor',
     'disable_nova_metadata',
@@ -60,6 +60,8 @@ TO_PATCH = [
     'services',
     'remove_old_packages',
     'is_container',
+    'configure_deferred_restarts',
+    'deferrable_services',
     'charmhelpers.contrib.openstack.utils.is_unit_paused_set',
 ]
 
@@ -236,7 +238,9 @@ class TestQuantumHooks(CharmTestCase):
         self.assertTrue(_install.called)
         self.assertTrue(_config_changed.called)
         self.assertTrue(self.install_systemd_override.called)
-        self.service_restart.assert_called_once_with('neutron-metadata-agent')
+        self.deferrable_svc_restart.assert_called_once_with(
+            'neutron-metadata-agent',
+            'Package purge detected')
 
     def test_amqp_joined(self):
         self._call_hook('amqp-relation-joined')
@@ -326,7 +330,9 @@ class TestQuantumHooks(CharmTestCase):
         self._call_hook('quantum-network-service-relation-changed')
         self.assertTrue(self.CONFIGS.write_all.called)
         self.install_ca_cert.assert_called_with('cert')
-        self.service_restart.assert_called_with('nova-api-metadata')
+        self.deferrable_svc_restart.assert_called_with(
+            'nova-api-metadata',
+            'Restart trigger received')
         kv_mock.get.assert_called_with('restart_nonce')
         kv_mock.set.assert_called_with('restart_nonce',
                                        '1111111222222333333')
@@ -365,7 +371,9 @@ class TestQuantumHooks(CharmTestCase):
         self._call_hook('quantum-network-service-relation-changed')
         self.assertTrue(self.CONFIGS.write_all.called)
         self.install_ca_cert.assert_called_with('cert')
-        self.service_restart.assert_called_with('nova-api-metadata')
+        self.deferrable_svc_restart.assert_called_with(
+            'nova-api-metadata',
+            'Restart trigger received')
         kv_mock.get.assert_called_with('restart_nonce')
         kv_mock.set.assert_called_with('restart_nonce',
                                        '1111111222222333333')
@@ -405,7 +413,7 @@ class TestQuantumHooks(CharmTestCase):
         self._call_hook('quantum-network-service-relation-changed')
         self.assertTrue(self.CONFIGS.write_all.called)
         self.install_ca_cert.assert_called_with('cert')
-        self.assertFalse(self.service_restart.called)
+        self.assertFalse(self.deferrable_svc_restart.called)
         kv_mock.get.assert_called_with('restart_nonce')
         self.assertFalse(kv_mock.set.called)
         self.assertFalse(kv_mock.flush.called)

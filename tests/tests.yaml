@@ -60,12 +60,14 @@ configure_options:
   configure_gateway_ext_port_use_juju_wait: false
 
 tests:
+  - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayDeferredRestartTest
   - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayTest
   - zaza.openstack.charm_tests.neutron.tests.SecurityTest
   - zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest
   - zaza.openstack.charm_tests.neutron.tests.NeutronOvsVsctlTest
   - zaza.openstack.charm_tests.neutron.tests.NeutronBridgePortMappingTest
   - migrate-ovn:
+    - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayDeferredRestartTest
     - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayTest
     - zaza.openstack.charm_tests.neutron.tests.SecurityTest
     - zaza.openstack.charm_tests.neutron.tests.NeutronOvsVsctlTest

@@ -12,8 +12,11 @@ from charmhelpers.core.hookenv import (
     UnregisteredHookError,
     status_set,
 )
-from charmhelpers.core.host import service_restart
 from charmhelpers.core.unitdata import kv
+from charmhelpers.contrib.openstack.deferred_events import (
+    configure_deferred_restarts,
+    deferrable_svc_restart,
+)
 from charmhelpers.fetch import (
     apt_update,
     apt_install,
@@ -33,8 +36,8 @@ from charmhelpers.contrib.hahelpers.apache import (
 from charmhelpers.contrib.openstack.utils import (
     configure_installation_source,
     openstack_upgrade_available,
-    pausable_restart_on_change as restart_on_change,
     is_unit_paused_set,
+    os_restart_on_change as restart_on_change,
     series_upgrade_prepare,
     series_upgrade_complete,
 )
@@ -76,6 +79,7 @@ from neutron_utils import (
     disable_neutron_lbaas,
     remove_old_packages,
     deprecated_services,
+    deferrable_services,
 )
 
 hooks = Hooks()
@@ -140,6 +144,7 @@ def install():
 @restart_on_change(restart_map)
 @harden()
 def config_changed():
+    configure_deferred_restarts(deferrable_services())
     if not config('action-managed-upgrade'):
         if openstack_upgrade_available(NEUTRON_COMMON):
             status_set('maintenance', 'Running openstack upgrade')
@@ -205,7 +210,7 @@ def upgrade_charm():
     if packages_removed and not is_unit_paused_set():
         log("Package purge detected, restarting services", "INFO")
         for s in services():
-            service_restart(s)
+            deferrable_svc_restart(s, 'Package purge detected')
     config_changed()
     update_legacy_ha_files(force=True)
 
@@ -288,7 +293,9 @@ def nm_changed():
             previous_nonce = db.get('restart_nonce')
             if previous_nonce != restart_nonce:
                 if not is_unit_paused_set():
-                    service_restart('nova-api-metadata')
+                    deferrable_svc_restart(
+                        'nova-api-metadata',
+                        'Restart trigger received')
                 db.set('restart_nonce', restart_nonce)
                 db.flush()
     # LP: #1812813

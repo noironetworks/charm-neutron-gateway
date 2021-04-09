@@ -803,6 +803,26 @@ def services():
     return list(set(_services))
 
 
+def deferrable_services():
+    """Services which should be stopped from restarting.
+
+    All services from services() are deferable. But the charm may
+    install a package which install a service that the charm does not add
+    to its restart_map. In that case it will be missing from
+    self.services. However one of the jobs of deferred events is to ensure
+    that packages updates outside of charms also do not restart services.
+    To ensure there is a complete list take the services from services{}
+    and also add in a known list of networking services.
+
+    NOTE: It does not matter if one of the services in the list is not
+    installed on the system.
+    """
+    _svcs = services()
+    _svcs.extend(['ovs-vswitchd', 'ovsdb-server',
+                  'openvswitch-switch'])
+    return list(set(_svcs))
+
+
 def do_openstack_upgrade(configs):
     """
     Perform an upgrade.  Takes care of upgrading packages, rewriting
