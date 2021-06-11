@@ -302,7 +302,7 @@ class TestNeutronGatewayContext(CharmTestCase):
             'nfg_log_output_base': None,
             'nfg_log_rate_limit': None,
             'ovsdb_timeout': 60,
-            'keepalived_healthcheck_interval': 30,
+            'keepalived_healthcheck_interval': 0,
         })
 
     @patch('os.environ.get')
