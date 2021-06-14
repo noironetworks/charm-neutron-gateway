@@ -123,3 +123,24 @@ charm's instance-mtu option can be used to reduce instance MTU via DHCP.
     juju set neutron-gateway instance-mtu=1400
 
 Note that this option was added in Havana and will be ignored in older releases.
+
+Deferred service events
+=======================
+
+Operational or maintenance procedures applied to a cloud often lead to the
+restarting of various OpenStack services and/or the calling of certain charm
+hooks. Although normal, such events can be undesirable due to the service
+interruptions they can cause.
+
+The deferred service events feature provides the operator the choice of
+preventing these service restarts and hook calls from occurring, which can then
+be resolved at a more opportune time.
+
+See the [Deferred service events][cdg-deferred-service-events] page in the
+[OpenStack Charms Deployment Guide][cdg] for an in-depth treatment of this
+feature.
+
+<!-- LINKS -->
+
+[cdg]: https://docs.openstack.org/project-deploy-guide/charm-deployment-guide
+[cdg-deferred-service-events]: https://docs.openstack.org/project-deploy-guide/charm-deployment-guide/latest/deferred-events.html
