@@ -2,6 +2,8 @@ import os
 import shutil
 import subprocess
 from shutil import copy2
+import charmhelpers.contrib.openstack.policy_rcd as policy_rcd
+import charmhelpers.contrib.openstack.deferred_events as deferred_events
 from charmhelpers.core.host import (
     lsb_release,
     mkdir,
@@ -320,6 +322,14 @@ def remove_old_packages():
     '''
     installed_packages = filter_missing_packages(get_purge_packages())
     if installed_packages:
+        if 'neutron-lbaasv2-agent' in installed_packages:
+            # Remove policyrd entry that would stop dpkg from stopping
+            # service when package is removed. Bug #1931655
+            policy_rcd.remove_policy_block(
+                'neutron-lbaasv2-agent',
+                ['restart', 'stop', 'try-restart'])
+            deferred_events.clear_deferred_restarts(
+                'neutron-lbaasv2-agent')
         apt_purge(installed_packages, fatal=True)
         apt_autoremove(purge=True, fatal=True)
     return bool(installed_packages)
