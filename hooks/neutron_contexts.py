@@ -49,8 +49,26 @@ CORE_PLUGIN = {
     OVS_ODL: NEUTRON_OVS_ODL_PLUGIN,
 }
 
+IPTABLES_HYBRID = 'iptables_hybrid'
+OPENVSWITCH = 'openvswitch'
+VALID_FIREWALL_DRIVERS = (IPTABLES_HYBRID, OPENVSWITCH)
+
 NFG_LOG_RATE_LIMIT_MIN = 100
 NFG_LOG_BURST_LIMIT_MIN = 25
+
+
+def _get_firewall_driver():
+    '''
+    Determine the firewall driver to use based on configuration,
+    OpenStack and Ubuntu releases.
+
+    @returns str: firewall driver to use for OpenvSwitch
+    '''
+    driver = config('firewall-driver') or IPTABLES_HYBRID
+    if driver not in VALID_FIREWALL_DRIVERS:
+        return IPTABLES_HYBRID
+
+    return driver
 
 
 def get_availability_zone():
@@ -216,6 +234,8 @@ class NeutronGatewayContext(NeutronAPIContext):
                 ctxt['nfg_log_burst_limit'],
                 NFG_LOG_BURST_LIMIT_MIN
             )
+
+        ctxt['firewall_driver'] = _get_firewall_driver()
 
         return ctxt
 
