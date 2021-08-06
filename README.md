@@ -120,7 +120,7 @@ packet fragmentation due to GRE overhead. One solution is to increase the MTU on
 physical hosts and network equipment. When this is not possible or practical the
 charm's instance-mtu option can be used to reduce instance MTU via DHCP.
 
-    juju set neutron-gateway instance-mtu=1400
+    juju config neutron-gateway instance-mtu=1400
 
 Note that this option was added in Havana and will be ignored in older releases.
 
