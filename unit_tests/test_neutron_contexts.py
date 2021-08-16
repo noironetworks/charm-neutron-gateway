@@ -240,6 +240,7 @@ class TestNeutronGatewayContext(CharmTestCase):
             'nfg_log_rate_limit': 100,
             'ovsdb_timeout': 10,
             'keepalived_healthcheck_interval': 0,
+            'firewall_driver': "iptables_hybrid",
         })
 
     @patch.object(neutron_contexts, 'validate_nfg_log_path', lambda x: x)
@@ -303,6 +304,7 @@ class TestNeutronGatewayContext(CharmTestCase):
             'nfg_log_rate_limit': None,
             'ovsdb_timeout': 60,
             'keepalived_healthcheck_interval': 0,
+            'firewall_driver': "iptables_hybrid",
         })
 
     @patch('os.environ.get')

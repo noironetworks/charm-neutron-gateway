@@ -327,6 +327,13 @@ options:
       for Neutron agents (DHCP and L3 agents). This option overrides the
       default-availability-zone charm config setting only when the Juju
       provider sets JUJU_AVAILABILITY_ZONE.
+  firewall-driver:
+    type: string
+    default:
+    description: |
+      Firewall driver to use to support use of security groups with
+      instances; valid values include iptables_hybrid (default) and
+      openvswitch. This config option is ignored for < Queens.
   firewall-group-log-output-base:
     type: string
     default:
