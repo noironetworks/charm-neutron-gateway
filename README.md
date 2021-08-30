@@ -1,131 +1,189 @@
-Overview
---------
+# Overview
 
-Neutron provides flexible software defined networking (SDN) for OpenStack.
+The neutron-gateway charm deploys the data plane of
+[Neutron][upstream-neutron], the core OpenStack service that provides software
+defined networking (SDN) for Nova instances. This provides the Neutron Gateway
+service, which in turn supplies two key services: L3 network routing and DHCP.
+The charm works alongside other Juju-deployed OpenStack applications; in
+particular: neutron-openvswitch, nova-compute, and nova-cloud-controller.
 
-This charm is designed to be used in conjunction with the rest of the OpenStack
-related charms in the charm store to virtualize the network that Nova Compute
-instances plug into.
+> **Note**: Starting with OpenStack Train, the neutron-gateway and
+  neutron-openvswitch charm combination can be replaced by the [OVN
+  charms][cdg-ovn] (e.g. ovn-central, ovn-chassis, and neutron-api-plugin-ovn).
 
-Neutron supports a rich plugin/extension framework for propriety networking
-solutions and supports (in core) Nicira NVP, NEC, Cisco and others...
+# Usage
 
-See the upstream [Neutron documentation](https://docs.openstack.org/neutron/latest/)
-for more details.
+## Configuration
 
-Usage
------
+This section covers common and/or important configuration options. See file
+`config.yaml` for the full list of options, along with their descriptions and
+default values. See the [Juju documentation][juju-docs-config-apps] for details
+on configuring applications.
 
-In order to use Neutron with OpenStack, you will need to deploy the
-nova-compute and nova-cloud-controller charms with the network-manager
-configuration set to 'Neutron':
+#### `data-port`
 
-    nova-cloud-controller:
-        network-manager: Neutron
+A bridge that Neutron Gateway will bind to, given in the form of a
+space-delimited bridge:port mapping (e.g. 'br-ex:ens8'). The port will be added
+to its corresponding bridge.
 
-This decision must be made prior to deploying OpenStack with Juju as
-Neutron is deployed baked into these charms from install onwards:
+> **Note**: If network device names are not consistent between hosts (e.g.
+  'eth1' and 'ens8') a list of values can be provided where a MAC address is
+  used in the place of a device name. The charm will iterate through the list
+  and configure the first matching interface.
 
-    juju deploy nova-compute
-    juju deploy --config config.yaml nova-cloud-controller
-    juju deploy neutron-api
-    juju add-relation nova-compute nova-cloud-controller
-    juju add-relation neutron-api nova-cloud-controller
+The specified bridge(s) should match the one(s) defined in the
+`bridge-mappings` option.
 
-The Neutron Gateway can then be added to the deploying:
+Flat or VLAN network types are supported.
+
+The device itself must not have any L3 configuration. In MAAS, it must have an
+IP mode of 'Unconfigured'.
+
+#### `bridge-mappings`
+
+A space-delimited list of ML2 data provider:bridge mappings (e.g.
+'physnet1:br-ex'). The specified bridge(s) should match the one(s) defined in
+the `data-port` option.
+
+#### `openstack-origin`
+
+The `openstack-origin` option states the software sources. A common value is an
+OpenStack UCA release (e.g. 'cloud:bionic-ussuri' or 'cloud:focal-victoria').
+See [Ubuntu Cloud Archive][wiki-uca]. The underlying host's existing apt
+sources will be used if this option is not specified (this behaviour can be
+explicitly chosen by using the value of 'distro').
+
+## Deployment
+
+These deployment instructions assume the following pre-existing applications:
+neutron-api, nova-cloud-controller, and rabbitmq-server.
+
+> **Important**: For Neutron Gateway to function properly, the
+  nova-cloud-controller charm must have its `network-manager` option set to
+  'Neutron'.
+
+Deploy Neutron Gateway:
 
     juju deploy neutron-gateway
-    juju add-relation neutron-gateway mysql
-    juju add-relation neutron-gateway rabbitmq-server
-    juju add-relation neutron-gateway nova-cloud-controller
-    juju add-relation neutron-gateway neutron-api
+    juju add-relation neutron-gateway:quantum-network-service nova-cloud-controller:quantum-network-service
+    juju add-relation neutron-gateway:neutron-plugin-api neutron-api:neutron-plugin-api
+    juju add-relation neutron-gateway:amqp rabbitmq-server:amqp
 
-The gateway provides two key services; L3 network routing and DHCP services.
+### Port configuration
 
-These are both required in a fully functional Neutron OpenStack deployment.
+Network ports are configured with the `bridge-mappings` and `data-port` options
+but the neutron-api charm also has several relevant options (e.g.
+`flat-network-providers`, `vlan-ranges`, etc.). Additionally, the network
+topology can be further defined with supplementary `openstack` client commands.
 
-Configuration Options
----------------------
+<!-- The two trailing spaces for each of the below three example headers is
+deliberate. -->
 
-Port Configuration
-==================
+**Example #1**  
+This configuration has a single external network and is typically used when
+floating IP addresses are combined with a GRE private network.
 
-All network types (internal, external) are configured with bridge-mappings and
-data-port and the flat-network-providers configuration option of the
-neutron-api charm.  Once deployed, you can configure the network specifics
-using neutron net-create.
-
-If the device name is not consistent between hosts, you can specify the same
-bridge multiple times with MAC addresses instead of interface names.  The charm
-will loop through the list and configure the first matching interface.
-
-Basic configuration of a single external network, typically used as floating IP
-addresses combined with a GRE private network:
+Charm option values (YAML):
 
     neutron-gateway:
-        bridge-mappings:         physnet1:br-ex
-        data-port:               br-ex:eth1
+        bridge-mappings: physnet1:br-ex
+        data-port: br-ex:eth1
     neutron-api:
-        flat-network-providers:  physnet1
+        flat-network-providers: physnet1
 
-    neutron net-create --provider:network_type flat \
-        --provider:physical_network physnet1 --router:external=true \
-        external
-    neutron router-gateway-set provider external
+Supplementary commands:
 
-Alternative configuration with two networks, where the internal private
-network is directly connected to the gateway with public IP addresses but a
-floating IP address range is also offered.
+    openstack network create --provider-network-type flat \
+       --provider-physical-network physnet1 --external \
+       external
+    openstack router set router1 --external-gateway external
+
+**Example #2**  
+This configuration is for two networks, where an internal private network is
+directly connected to the gateway with public IP addresses but a floating IP
+address range is also offered.
+
+Charm option values (YAML):
 
     neutron-gateway:
-        bridge-mappings:         physnet1:br-data external:br-ex
-        data-port:               br-data:eth1 br-ex:eth2
+        bridge-mappings: physnet1:br-data external:br-ex
+        data-port: br-data:eth1 br-ex:eth2
     neutron-api:
-        flat-network-providers:  physnet1 external
+        flat-network-providers: physnet1 external
 
-Alternative configuration with two external networks, one for public instance
-addresses and one for floating IP addresses.  Both networks are on the same
-physical network connection (but they might be on different VLANs, that is
-configured later using neutron net-create).
+**Example #3**  
+This configuration has two external networks, where one is for public instance
+addresses and one is for floating IP addresses. Both networks are on the same
+physical network connection (but they might be on different VLANs).
+
+Charm option values (YAML):
 
     neutron-gateway:
-        bridge-mappings:         physnet1:br-data
-        data-port:               br-data:eth1
+        bridge-mappings: physnet1:br-data
+        data-port: br-data:eth1
     neutron-api:
-        flat-network-providers:  physnet1
+        flat-network-providers: physnet1
 
-    neutron net-create --provider:network_type vlan \
-        --provider:segmentation_id 400 \
-        --provider:physical_network physnet1 --shared external
-    neutron net-create --provider:network_type vlan \
-        --provider:segmentation_id 401 \
-        --provider:physical_network physnet1 --shared --router:external=true \
-        floating
-    neutron router-gateway-set provider floating
+Supplementary commands:
 
-This replaces the previous system of using ext-port, which always created a bridge
-called br-ex for external networks which was used implicitly by external router
-interfaces.
+    openstack network create --provider-network-type vlan \
+       --provider-segment 400 \
+       --provider-physical-network physnet1 --share \
+       external
+    openstack network create --provider-network-type vlan \
+       --provider-segment 401 \
+       --provider-physical-network physnet1 --share --external \
+       floating
+    openstack router set router1 --external-gateway floating
 
-Note: if the 'data-port' config item is set, then the 'ext-port' option is
-ignored.  This is to prevent misconfiguration of the charm.  A warning is
-logged and the unit is marked as blocked in order to indicate that the charm is
-misconfigured.
+#### legacy `ext-port` option
 
-Instance MTU
-============
+The `ext-port` option is deprecated and is superseded by the `data-port`
+option. The `ext-port` option always created a bridge called 'br-ex' for
+external networks that was used implicitly by external router interfaces.
 
-When using Open vSwitch plugin with GRE tunnels default MTU of 1500 can cause
-packet fragmentation due to GRE overhead. One solution is to increase the MTU on
-physical hosts and network equipment. When this is not possible or practical the
-charm's instance-mtu option can be used to reduce instance MTU via DHCP.
+The following will occur if both the `data-port` and `ext-port` options are
+set:
+
+* the neutron-gateway unit will be marked as 'blocked' to indicate that the
+  charm is misconfigured
+* the `ext-port` option will be ignored
+* a warning will be logged
+
+## Instance MTU
+
+When using Open vSwitch plugin with GRE tunnels the default MTU of 1500 can
+cause packet fragmentation due to GRE overhead. One solution to this problem is
+to increase the MTU on physical hosts and network equipment. When this is not
+feasible the charm's `instance-mtu` option can be used to reduce instance MTU
+via DHCP:
 
     juju config neutron-gateway instance-mtu=1400
 
-Note that this option was added in Havana and will be ignored in older releases.
+> **Note**: The `instance-mtu` option is supported starting with OpenStack
+  Havana.
 
-Deferred service events
-=======================
+## Actions
+
+This section covers Juju [actions][juju-docs-actions] supported by the charm.
+Actions allow specific operations to be performed on a per-unit basis. To
+display action descriptions run `juju actions --schema neutron-gateway`. If the
+charm is not deployed then see file `actions.yaml`.
+
+* `cleanup`
+* `get-status-dhcp`
+* `get-status-lb`
+* `get-status-routers`
+* `openstack-upgrade`
+* `pause`
+* `restart-services`
+* `resume`
+* `restart-services`
+* `run-deferred-hooks`
+* `security-checklist`
+* `show-deferred-events`
+
+## Deferred service events
 
 Operational or maintenance procedures applied to a cloud often lead to the
 restarting of various OpenStack services and/or the calling of certain charm
@@ -140,7 +198,26 @@ See the [Deferred service events][cdg-deferred-service-events] page in the
 [OpenStack Charms Deployment Guide][cdg] for an in-depth treatment of this
 feature.
 
+# Documentation
+
+The OpenStack Charms project maintains two documentation guides:
+
+* [OpenStack Charm Guide][cg]: for project information, including development
+  and support notes
+* [OpenStack Charms Deployment Guide][cdg]: for charm usage information
+
+# Bugs
+
+Please report bugs on [Launchpad][lp-bugs-charm-neutron-gateway].
+
 <!-- LINKS -->
 
+[cg]: https://docs.openstack.org/charm-guide
 [cdg]: https://docs.openstack.org/project-deploy-guide/charm-deployment-guide
 [cdg-deferred-service-events]: https://docs.openstack.org/project-deploy-guide/charm-deployment-guide/latest/deferred-events.html
+[lp-bugs-charm-neutron-gateway]: https://bugs.launchpad.net/charm-neutron-gateway/+filebug
+[juju-docs-config-apps]: https://juju.is/docs/configuring-applications
+[upstream-neutron]: https://docs.openstack.org/neutron/latest/
+[juju-docs-actions]: https://jaas.ai/docs/actions
+[cdg-ovn]: https://docs.openstack.org/project-deploy-guide/charm-deployment-guide/latest/app-ovn.html
+[wiki-uca]: https://wiki.ubuntu.com/OpenStack/CloudArchive
