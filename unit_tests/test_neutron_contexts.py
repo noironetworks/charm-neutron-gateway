@@ -61,11 +61,14 @@ class TestL3AgentContext(CharmTestCase):
     def test_new_ext_network(self, _NeutronAPIContext):
         self.os_release.return_value = 'stein'
         _NeutronAPIContext.return_value = \
-            DummyNeutronAPIContext(return_value={'enable_dvr': False,
-                                                 'report_interval': 30,
-                                                 'rpc_response_timeout': 60,
-                                                 'enable_l3ha': True,
-                                                 })
+            DummyNeutronAPIContext(return_value={
+                'enable_dvr': False,
+                'report_interval': 30,
+                'rpc_response_timeout': 60,
+                'enable_l3ha': True,
+                'enable_fwaas': True,
+                'l3_extension_plugins': ['fwaas_v2'],
+            })
         self.test_config.set('run-internal-router', 'none')
         self.test_config.set('external-network-id', '')
         self.eligible_leader.return_value = False

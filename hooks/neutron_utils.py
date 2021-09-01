@@ -189,6 +189,9 @@ GATEWAY_PKGS = {
     ],
 }
 
+# python3-{nova, neutron} is added in PY3_PACKAGES to support
+# switch to py3 for Rocky release. Previously installed py2
+# packages are added to PURGE_PACKAGES to purge.
 PURGE_PACKAGES = [
     'python-mysqldb',
     'python-psycopg2',
@@ -295,6 +298,10 @@ def get_packages():
         packages.extend(PY3_PACKAGES)
         if cmp_os_source >= 'train':
             packages.remove('python3-neutron-lbaas')
+        # Remove python3-neutron-fwaas from stein release as the package is
+        # included as dependency for neutron-l3-agent.
+        if cmp_os_source >= 'stein':
+            packages.remove('python3-neutron-fwaas')
 
     return packages
 
