@@ -79,7 +79,7 @@ topology can be further defined with supplementary `openstack` client commands.
 <!-- The two trailing spaces for each of the below three example headers is
 deliberate. -->
 
-**Example #1**  
+**Example 1**  
 This configuration has a single external network and is typically used when
 floating IP addresses are combined with a GRE private network.
 
@@ -98,7 +98,7 @@ Supplementary commands:
        external
     openstack router set router1 --external-gateway external
 
-**Example #2**  
+**Example 2**  
 This configuration is for two networks, where an internal private network is
 directly connected to the gateway with public IP addresses but a floating IP
 address range is also offered.
@@ -111,7 +111,7 @@ Charm option values (YAML):
     neutron-api:
         flat-network-providers: physnet1 external
 
-**Example #3**  
+**Example 3**  
 This configuration has two external networks, where one is for public instance
 addresses and one is for floating IP addresses. Both networks are on the same
 physical network connection (but they might be on different VLANs).
