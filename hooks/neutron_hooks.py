@@ -115,6 +115,7 @@ def install():
     status_set('maintenance', 'Installing apt packages')
     apt_update(fatal=True)
     apt_install('python-six', fatal=True)  # Force upgrade
+    apt_install('python3-neutronclient')
     if valid_plugin():
         apt_install(filter_installed_packages(get_early_packages()),
                     fatal=True)

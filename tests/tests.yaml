@@ -68,6 +68,7 @@ configure_options:
 tests:
   - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayDeferredRestartTest
   - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayTest
+  - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayShowActionsTest
   - zaza.openstack.charm_tests.neutron.tests.SecurityTest
   - zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest
   - zaza.openstack.charm_tests.neutron.tests.NeutronOvsVsctlTest
@@ -75,6 +76,7 @@ tests:
   - migrate-ovn:
     - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayDeferredRestartTest
     - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayTest
+    - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayShowActionsTest
     - zaza.openstack.charm_tests.neutron.tests.SecurityTest
     - zaza.openstack.charm_tests.neutron.tests.NeutronOvsVsctlTest
     - zaza.openstack.charm_tests.neutron.tests.NeutronBridgePortMappingTest
