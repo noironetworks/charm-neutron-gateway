@@ -10,6 +10,8 @@
 
   /usr/bin/neutron-l3-agent r,
 
+  /usr/sbin/keepalived rix,
+
   /sbin/ldconfig* rix,
 
   /{,usr/}bin/ r,
