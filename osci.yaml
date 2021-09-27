@@ -2,3 +2,13 @@
     templates:
       - charm-unit-jobs
       - charm-functional-jobs
+    check:
+      jobs:
+        - focal-xena:
+            voting: false
+        - impish-xena:
+            voting: false
+        # disabled as test flaps:
+        # Bug: https://bugs.launchpad.net/charm-neutron-gateway/+bug/1945746
+        - hirsute-wallaby:
+            voting: false

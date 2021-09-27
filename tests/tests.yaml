@@ -25,7 +25,9 @@ dev_bundles:
   - xenial-pike
   - xenial-queens
   - bionic-rocky
+  - migrate-ovn: focal-xena
   - migrate-ovn: hirsute-wallaby
+  - migrate-ovn: impish-xena
 
 target_deploy_status:
   neutron-api-plugin-ovn:
@@ -36,16 +38,16 @@ target_deploy_status:
     workload-status: waiting
   ovn-chassis:
     workload-status: maintenance
-    workload-status-message: "Paused. Use 'resume' action to resume normal service."
+    workload-status-message-prefix: "Paused. Use 'resume' action to resume normal service."
   ovn-dedicated-chassis:
     workload-status: maintenance
-    workload-status-message: "Paused. Use 'resume' action to resume normal service."
+    workload-status-message-prefix: "Paused. Use 'resume' action to resume normal service."
   ovn-central:
     workload-status: waiting
-    workload-status-message: "'ovsdb-peer' incomplete, 'certificates' awaiting server certificate data"
+    workload-status-message-prefix: "'ovsdb-peer' incomplete, 'certificates' awaiting server certificate data"
   vault:
     workload-status: blocked
-    workload-status-message: Vault needs to be initialized
+    workload-status-message-prefix: Vault needs to be initialized
 
 configure:
   - zaza.openstack.charm_tests.glance.setup.add_lts_image
@@ -90,4 +92,5 @@ tests_options:
   # allows verifying instances survive a SDN migration.
   zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest.test_instances_have_networking.run_resource_cleanup: false
   force_deploy:
-    - hirsute-wallaby
+    - groovy-victoria
+    - impish-xena
