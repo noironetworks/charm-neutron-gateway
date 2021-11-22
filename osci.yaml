@@ -8,9 +8,3 @@
       - charm-ussuri-functional-jobs
       - charm-stein-functional-jobs
       - charm-queens-functional-jobs
-    check:
-      jobs:
-        # Non-voting due to:
-        # https://bugs.launchpad.net/charm-neutron-gateway/+bug/1951650
-        - bionic-ussuri:
-            voting: false
