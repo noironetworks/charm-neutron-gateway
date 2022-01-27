@@ -6,22 +6,13 @@ charm_name: neutron-gateway
 # OVS to OVN.
 #
 smoke_bundles:
-  - migrate-ovn: focal-ussuri
+  - migrate-ovn: focal-xena
 
 gate_bundles:
-  - bionic-queens
-  - bionic-stein
-  - bionic-ussuri
-  - migrate-ovn: focal-ussuri
-  - migrate-ovn: focal-victoria
-  - migrate-ovn: focal-wallaby
   - migrate-ovn: focal-xena
-  - migrate-ovn: hirsute-wallaby
   - migrate-ovn: impish-xena
 
 dev_bundles:
-  - bionic-rocky
-  - bionic-train
   - migrate-ovn: focal-yoga
   - migrate-ovn: jammy-yoga
 
@@ -88,6 +79,5 @@ tests_options:
   # allows verifying instances survive a SDN migration.
   zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest.test_instances_have_networking.run_resource_cleanup: false
   force_deploy:
-    - hirsute-wallaby
     - impish-xena
     - jammy-yoga
