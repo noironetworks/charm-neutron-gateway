@@ -836,7 +836,7 @@ def deferrable_services():
     """
     _svcs = services()
     _svcs.extend(['ovs-vswitchd', 'ovsdb-server',
-                  'openvswitch-switch'])
+                  'openvswitch-switch', 'ovs-record-hostname'])
     return list(set(_svcs))
 
 
