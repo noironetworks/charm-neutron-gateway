@@ -14,3 +14,4 @@ xenial
 .unit-state.db
 func-results.json
 __pycache__
+*.charm

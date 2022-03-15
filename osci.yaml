@@ -1,14 +1,11 @@
 - project:
     templates:
-      - charm-unit-jobs
-      - charm-functional-jobs
+      - charm-unit-jobs-py38
     check:
       jobs:
-        - focal-xena:
-            voting: false
-        - impish-xena:
-            voting: false
-        # disabled as test flaps:
-        # Bug: https://bugs.launchpad.net/charm-neutron-gateway/+bug/1945746
-        - hirsute-wallaby:
-            voting: false
+        - focal-wallaby
+        - focal-xena
+    vars:
+      needs_charm_build: true
+      charm_build_name: neutron-gateway
+      build_type: charmcraft
