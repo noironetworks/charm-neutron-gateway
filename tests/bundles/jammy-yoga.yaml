@@ -75,6 +75,7 @@ applications:
       flat-network-providers: physnet1
       neutron-security-groups: true
       openstack-origin: *openstack-origin
+      enable-qos: true
     to:
       - '4'
     channel: yoga/edge

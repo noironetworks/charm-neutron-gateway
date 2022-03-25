@@ -70,7 +70,8 @@ tests:
     - zaza.openstack.charm_tests.neutron.tests.NeutronOvsVsctlTest
     - zaza.openstack.charm_tests.neutron.tests.NeutronBridgePortMappingTest
     - zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest
-    - zaza.openstack.charm_tests.ovn.tests.OVSOVNMigrationTest
+    # Note(wolsen) - temporarily disabled due to LP #1968647
+    # - zaza.openstack.charm_tests.ovn.tests.OVSOVNMigrationTest
     - zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest
 
 tests_options:
