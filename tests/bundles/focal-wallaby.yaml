@@ -33,19 +33,19 @@ applications:
 
   neutron-api-mysql-router:
     charm: ch:mysql-router
-    channel: 8.0.19/edge
+    channel: 8.0/edge
   keystone-mysql-router:
     charm: ch:mysql-router
-    channel: 8.0.19/edge
+    channel: 8.0/edge
   nova-cloud-controller-mysql-router:
     charm: ch:mysql-router
-    channel: 8.0.19/edge
+    channel: 8.0/edge
   glance-mysql-router:
     charm: ch:mysql-router
-    channel: 8.0.19/edge
+    channel: 8.0/edge
   placement-mysql-router:
     charm: ch:mysql-router
-    channel: 8.0.19/edge
+    channel: 8.0/edge
 
   mysql-innodb-cluster:
     charm: ch:mysql-innodb-cluster
@@ -56,7 +56,7 @@ applications:
       - '0'
       - '1'
       - '2'
-    channel: 8.0.19/edge
+    channel: 8.0/edge
 
   rabbitmq-server:
     charm: ch:rabbitmq-server
@@ -103,7 +103,7 @@ applications:
     charm: ch:neutron-openvswitch
     channel: xena/edge
   neutron-gateway:
-    charm: "../../../neutron-gateway"
+    charm: ../../neutron-gateway.charm
     num_units: 1
     options:
       bridge-mappings: physnet1:br-ex
@@ -117,11 +117,12 @@ applications:
     options:
       # start new units paused to allow unit by unit OVS to OVN migration
       new-units-paused: true
+      source: *openstack-origin
     to:
       # NOTE: We deliberately colocate the ovn-dedicated-chassis with the
       # neutron-gateway for migration test purposes.
       - '7'
-    channel: openstack-xena/edge
+    channel: 21.09/edge
 
   nova-cloud-controller:
     charm: ch:nova-cloud-controller
@@ -154,7 +155,7 @@ applications:
 
   vault-mysql-router:
     charm: ch:mysql-router
-    channel: 8.0.19/edge
+    channel: 8.0/edge
   vault:
     charm: ch:vault
     num_units: 1
@@ -168,7 +169,7 @@ applications:
       source: *openstack-origin
     to:
       - '13'
-    channel: openstack-xena/edge
+    channel: 21.09/edge
   neutron-api-plugin-ovn:
     charm: ch:neutron-api-plugin-ovn
     channel: xena/edge
@@ -177,7 +178,7 @@ applications:
     options:
       # start new units paused to allow unit by unit OVS to OVN migration
       new-units-paused: true
-    channel: openstack-xena/edge
+    channel: 21.09/edge
 
 relations:
 
