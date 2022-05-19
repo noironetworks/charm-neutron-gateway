@@ -1,14 +1,25 @@
 - project:
     templates:
-      - charm-unit-jobs
-      - charm-functional-jobs
+      - charm-unit-jobs-py38
+      - charm-focal-ussuri-functional-jobs
+      - charm-victoria-functional-jobs
     check:
       jobs:
-        - focal-xena:
-            voting: false
-        - impish-xena:
-            voting: false
-        # disabled as test flaps:
-        # Bug: https://bugs.launchpad.net/charm-neutron-gateway/+bug/1945746
-        - hirsute-wallaby:
-            voting: false
+        - focal-ussuri_migrate-ovn_neutron-gateway
+        - focal-victoria_migrate-ovn_neutron-gateway
+    vars:
+      needs_charm_build: true
+      charm_build_name: neutron-gateway
+      build_type: charmcraft
+
+- job:
+    name: focal-ussuri_migrate-ovn_neutron-gateway
+    parent: focal-ussuri
+    vars:
+      tox_extra_args: migrate-ovn:focal-ussuri
+
+- job:
+    name: focal-victoria_migrate-ovn_neutron-gateway
+    parent: focal-victoria
+    vars:
+      tox_extra_args: migrate-ovn:focal-victoria
