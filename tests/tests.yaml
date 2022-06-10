@@ -6,15 +6,15 @@ charm_name: neutron-gateway
 # OVS to OVN.
 #
 smoke_bundles:
-  - migrate-ovn: focal-xena
+  - migrate-ovn: jammy-yoga
 
 gate_bundles:
-  - migrate-ovn: focal-xena
-  - migrate-ovn: impish-xena
+  - migrate-ovn: jammy-yoga
 
 dev_bundles:
-  - migrate-ovn: focal-yoga
   - migrate-ovn: jammy-yoga
+  - migrate-ovn: jammy-zed
+  - migrate-ovn: kinetic-zed
 
 target_deploy_status:
   neutron-api-plugin-ovn:
@@ -80,5 +80,4 @@ tests_options:
   # allows verifying instances survive a SDN migration.
   zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest.test_instances_have_networking.run_resource_cleanup: false
   force_deploy:
-    - impish-xena
-    - jammy-yoga
+    - kinetic-zed
