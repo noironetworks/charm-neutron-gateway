@@ -804,7 +804,7 @@ def restart_map(release=None):
             elif cmp_release >= 'newton' and 'neutron-lbaasv2-agent' in svcs:
                 svcs.remove('neutron-lbaasv2-agent')
         if svcs:
-            _map[f] = list(svcs)
+            _map[f] = sorted(list(svcs))
     return _map
 
 
