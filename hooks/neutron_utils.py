@@ -667,7 +667,7 @@ def remap_service(service_name):
     :param service_name: name of service to remap
     :returns: remapped service name or original value
     '''
-    source = os_release('neutron-common')
+    source = CompareOpenStackReleases(os_release('neutron-common'))
     for rename_source in SERVICE_RENAMES:
         if (source >= rename_source and
                 service_name in SERVICE_RENAMES[rename_source]):
