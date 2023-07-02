@@ -303,6 +303,7 @@ class OpenStackAmuletDeployment(AmuletDeployment):
             ('focal', 'cloud:focal-victoria'): self.focal_victoria,
             ('focal', 'cloud:focal-wallaby'): self.focal_wallaby,
             ('focal', 'cloud:focal-xena'): self.focal_xena,
+            ('focal', 'cloud:focal-yoga'): self.focal_yoga,
             ('groovy', None): self.groovy_victoria,
         }
         return releases[(self.series, self.openstack)]
@@ -325,7 +326,8 @@ class OpenStackAmuletDeployment(AmuletDeployment):
             ('focal', 'ussuri'),
             ('groovy', 'victoria'),
             ('hirsute', 'wallaby'),
-            ('impish', 'xena')
+            ('impish', 'xena'),
+            ('jammy', 'yoga'),
         ])
         if self.openstack:
             os_origin = self.openstack.split(':')[1]
