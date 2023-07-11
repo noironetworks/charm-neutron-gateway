@@ -13,6 +13,7 @@ description: |
   .
   This charm provides central Neutron networking services as part
   of a Neutron based OpenStack deployment
+docs: https://discourse.charmhub.io/t/neutron-gateway-docs-index/11000
 tags:
 - openstack
 series:
