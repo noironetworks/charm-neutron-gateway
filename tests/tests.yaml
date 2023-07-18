@@ -6,14 +6,15 @@ charm_name: neutron-gateway
 # OVS to OVN.
 #
 smoke_bundles:
-  - migrate-ovn: jammy-zed
+  - migrate-ovn: jammy-antelope
 
 gate_bundles:
-  - migrate-ovn: jammy-zed
+  - migrate-ovn: jammy-antelope
 
 dev_bundles:
-  - migrate-ovn: jammy-antelope
+  - migrate-ovn: jammy-bobcat
   - migrate-ovn: lunar-antelope
+  - migrate-ovn: mantic-bobcat
 
 target_deploy_status:
   neutron-api-plugin-ovn:
@@ -80,3 +81,4 @@ tests_options:
   zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest.test_instances_have_networking.run_resource_cleanup: false
   force_deploy:
     - lunar-antelope
+    - mantic-bobcat
