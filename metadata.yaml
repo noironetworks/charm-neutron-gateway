@@ -20,6 +20,7 @@ series:
 - bionic
 - eoan
 - focal
+- jammy
 - trusty
 - groovy
 extra-bindings:
