@@ -15,11 +15,9 @@ description: |
   of a Neutron based OpenStack deployment
 docs: https://discourse.charmhub.io/t/neutron-gateway-docs-index/11000
 tags:
-- openstack
+  - openstack
 series:
-- jammy
-- lunar
-- mantic
+  - jammy
 extra-bindings:
   data:
 provides:

@@ -6,16 +6,13 @@ charm_name: neutron-gateway
 # OVS to OVN.
 #
 smoke_bundles:
-  - migrate-ovn: jammy-antelope
-
+  - jammy-caracal
 gate_bundles:
-  - migrate-ovn: jammy-antelope
-
+  - jammy-antelope
+  - jammy-bobcat
+  - jammy-caracal
 dev_bundles:
-  - migrate-ovn: jammy-bobcat
-  - migrate-ovn: lunar-antelope
-  - migrate-ovn: mantic-bobcat
-
+  - noble-caracal
 target_deploy_status:
   neutron-api-plugin-ovn:
     # NOTE(lourot): at first we deploy a bundle in which this subordinate charm
@@ -43,13 +40,13 @@ configure:
   - zaza.openstack.charm_tests.nova.setup.manage_ssh_key
   - zaza.openstack.charm_tests.keystone.setup.add_demo_user
   - migrate-ovn:
-    - zaza.openstack.charm_tests.vault.setup.auto_initialize_no_validation
-    - zaza.openstack.charm_tests.glance.setup.add_lts_image
-    - zaza.openstack.charm_tests.neutron.setup.basic_overcloud_network
-    - zaza.openstack.charm_tests.nova.setup.create_flavors
-    - zaza.openstack.charm_tests.nova.setup.manage_ssh_key
-    - zaza.openstack.charm_tests.keystone.setup.add_demo_user
-    - zaza.openstack.charm_tests.ovn.setup.pre_migration_configuration
+      - zaza.openstack.charm_tests.vault.setup.auto_initialize_no_validation
+      - zaza.openstack.charm_tests.glance.setup.add_lts_image
+      - zaza.openstack.charm_tests.neutron.setup.basic_overcloud_network
+      - zaza.openstack.charm_tests.nova.setup.create_flavors
+      - zaza.openstack.charm_tests.nova.setup.manage_ssh_key
+      - zaza.openstack.charm_tests.keystone.setup.add_demo_user
+      - zaza.openstack.charm_tests.ovn.setup.pre_migration_configuration
 
 configure_options:
   configure_gateway_ext_port_use_juju_wait: false
@@ -63,16 +60,16 @@ tests:
   - zaza.openstack.charm_tests.neutron.tests.NeutronOvsVsctlTest
   - zaza.openstack.charm_tests.neutron.tests.NeutronBridgePortMappingTest
   - migrate-ovn:
-    - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayDeferredRestartTest
-    - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayTest
-    - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayShowActionsTest
-    - zaza.openstack.charm_tests.neutron.tests.SecurityTest
-    - zaza.openstack.charm_tests.neutron.tests.NeutronOvsVsctlTest
-    - zaza.openstack.charm_tests.neutron.tests.NeutronBridgePortMappingTest
-    - zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest
+      - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayDeferredRestartTest
+      - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayTest
+      - zaza.openstack.charm_tests.neutron.tests.NeutronGatewayShowActionsTest
+      - zaza.openstack.charm_tests.neutron.tests.SecurityTest
+      - zaza.openstack.charm_tests.neutron.tests.NeutronOvsVsctlTest
+      - zaza.openstack.charm_tests.neutron.tests.NeutronBridgePortMappingTest
+      - zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest
     # Note(wolsen) - temporarily disabled due to LP #1968647
     # - zaza.openstack.charm_tests.ovn.tests.OVSOVNMigrationTest
-    - zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest
+      - zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest
 
 tests_options:
   # NOTE: This allows us to run the NeutronNetworkingTest multiple times while
@@ -80,5 +77,4 @@ tests_options:
   # allows verifying instances survive a SDN migration.
   zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest.test_instances_have_networking.run_resource_cleanup: false
   force_deploy:
-    - lunar-antelope
-    - mantic-bobcat
+    - noble-caracal
