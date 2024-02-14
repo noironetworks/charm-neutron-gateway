@@ -207,7 +207,6 @@ PURGE_PACKAGES = [
 PY3_PACKAGES = [
     'python3-nova',
     'python3-neutron',
-    'python3-neutron-fwaas',
     'python3-neutron-lbaas',
     'python3-zmq',  # fwaas_v2_log
 ]

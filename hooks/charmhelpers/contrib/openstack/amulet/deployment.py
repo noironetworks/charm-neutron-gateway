@@ -305,6 +305,7 @@ class OpenStackAmuletDeployment(AmuletDeployment):
             ('focal', 'cloud:focal-xena'): self.focal_xena,
             ('focal', 'cloud:focal-yoga'): self.focal_yoga,
             ('groovy', None): self.groovy_victoria,
+            ('jammy', None): self.jammy_yoga,
         }
         return releases[(self.series, self.openstack)]
 
