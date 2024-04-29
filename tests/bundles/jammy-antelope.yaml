@@ -116,7 +116,7 @@ applications:
       # NOTE: We deliberately colocate the ovn-dedicated-chassis with the
       # neutron-gateway for migration test purposes.
       - '7'
-    channel: latest/edge
+    channel: 24.03/edge
 
   nova-cloud-controller:
     charm: ch:nova-cloud-controller
@@ -163,7 +163,7 @@ applications:
       source: *openstack-origin
     to:
       - '13'
-    channel: latest/edge
+    channel: 24.03/edge
   neutron-api-plugin-ovn:
     charm: ch:neutron-api-plugin-ovn
     channel: 2024.1/edge
@@ -172,7 +172,7 @@ applications:
     options:
       # start new units paused to allow unit by unit OVS to OVN migration
       new-units-paused: true
-    channel: latest/edge
+    channel: 24.03/edge
 
 relations:
 
