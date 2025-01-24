@@ -207,6 +207,7 @@ PURGE_PACKAGES = [
 PY3_PACKAGES = [
     'python3-nova',
     'python3-neutron',
+    'python3-neutron-fwaas',
     'python3-neutron-lbaas',
     'python3-zmq',  # fwaas_v2_log
 ]
@@ -264,6 +265,7 @@ def get_packages():
     packages = deepcopy(GATEWAY_PKGS[plugin])
     cmp_os_source = CompareOpenStackReleases(os_release('neutron-common'))
     cmp_host_release = CompareHostReleases(lsb_release()['DISTRIB_CODENAME'])
+    ubuntu_rel = lsb_release()['DISTRIB_CODENAME'].lower()
     if plugin == OVS:
         if (cmp_os_source >= 'icehouse' and cmp_os_source < 'mitaka' and
                 cmp_host_release < 'utopic'):
@@ -300,6 +302,8 @@ def get_packages():
         packages.extend(PY3_PACKAGES)
         if cmp_os_source >= 'train':
             packages.remove('python3-neutron-lbaas')
+        if ubuntu_rel == "jammy":
+            packages.remove('python3-neutron-fwaas')
 
     return packages
 
