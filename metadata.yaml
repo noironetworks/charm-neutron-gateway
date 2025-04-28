@@ -21,6 +21,7 @@ series:
 - eoan
 - focal
 - jammy
+- noble
 - trusty
 - groovy
 extra-bindings:
