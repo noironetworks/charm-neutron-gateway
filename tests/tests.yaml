@@ -14,7 +14,6 @@ gate_bundles:
 dev_bundles:
   - migrate-ovn: jammy-yoga
   - migrate-ovn: jammy-zed
-  - migrate-ovn: kinetic-zed
 
 target_deploy_status:
   neutron-api-plugin-ovn:
@@ -79,5 +78,3 @@ tests_options:
   # reusing the instances created for the first run. This both saves time and
   # allows verifying instances survive a SDN migration.
   zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest.test_instances_have_networking.run_resource_cleanup: false
-  force_deploy:
-    - kinetic-zed
