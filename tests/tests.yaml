@@ -8,7 +8,6 @@ charm_name: neutron-gateway
 smoke_bundles:
   - jammy-caracal
 gate_bundles:
-  - jammy-antelope
   - jammy-bobcat
   - jammy-caracal
 dev_bundles:
@@ -76,5 +75,3 @@ tests_options:
   # reusing the instances created for the first run. This both saves time and
   # allows verifying instances survive a SDN migration.
   zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest.test_instances_have_networking.run_resource_cleanup: false
-  force_deploy:
-    - noble-caracal
