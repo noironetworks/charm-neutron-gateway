@@ -10,7 +10,6 @@ smoke_bundles:
 
 gate_bundles:
   - migrate-ovn: focal-xena
-  - migrate-ovn: impish-xena
 
 dev_bundles:
   - migrate-ovn: focal-yoga
@@ -79,6 +78,3 @@ tests_options:
   # reusing the instances created for the first run. This both saves time and
   # allows verifying instances survive a SDN migration.
   zaza.openstack.charm_tests.neutron.tests.NeutronNetworkingTest.test_instances_have_networking.run_resource_cleanup: false
-  force_deploy:
-    - impish-xena
-    - jammy-yoga
